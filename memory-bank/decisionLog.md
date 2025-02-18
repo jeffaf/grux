@@ -1,25 +1,72 @@
-# Decision Log - GRUX
+# Decision Log
 
-## 2025-02-17 - Memory Bank Initialization
-**Context:** Initializing the Memory Bank for the GRUX project to maintain project context and track progress.
-**Decision:** Created `memory-bank` directory and core files: `productContext.md`, `activeContext.md`, `progress.md`, and `decisionLog.md`.
-**Rationale:** To establish a structured system for documenting project information, decisions, and progress from the outset.
-**Implementation:** Used `write_to_file` tool to create each of the core files with initial content.
+## [2025-02-18] - Matrix Rain Effect Implementation Strategy
 
-## 2025-02-17 - Update projectBrief.md
-**Context:** Reviewing and updating `projectBrief.md` to include more project details and Memory Bank information.
-**Decision:** Updated `projectBrief.md` to include sections on project architecture, features, local storage, and the Memory Bank.
-**Rationale:** To provide a more comprehensive project overview and align `projectBrief.md` with the Memory Bank structure.
-**Implementation:** Used `write_to_file` tool to update `projectBrief.md` with new content.
+**Context:** Research into matrix rain effect implementations led us to analyze the Rezmason/matrix GitHub repository, which provides extensive insights into creating an authentic and performant matrix rain effect.
 
-## 2025-02-17 - Update Memory Bank with Clarified Details
-**Context:** User provided clarifications on tech feeds, visual styles, and project structure for GRUX.
-**Decision:** Updated `productContext.md` and `activeContext.md` to incorporate these details.
-**Rationale:** To ensure Memory Bank accurately reflects the project vision and specific requirements.
-**Implementation:** Used `write_to_file` tool to update `productContext.md` and `activeContext.md` with the new information.
+**Key Implementation Decisions:**
 
-## 2025-02-17 - Refine Project Priorities
-**Context:** User provided feedback to refine project priorities, emphasizing core visuals and error handling, and de-prioritizing other features.
-**Decision:** Updated `productContext.md` and `activeContext.md` to reflect these refined priorities.
-**Rationale:** To ensure the Memory Bank reflects the most current and focused project goals.
-**Implementation:** Used `write_to_file` tool to update `productContext.md` and `activeContext.md` with the refined priorities.
+1. **Rain Effect Core Characteristics:**
+   - Grid-based approach: Glyphs will be positioned in a fixed grid
+   - Stationary symbols with illumination waves creating the rain effect
+   - Multiple raindrops can occupy a single column with different speeds
+   - Sawtooth wave pattern for raindrop progression
+
+2. **Visual Elements:**
+   - Color: Use classic green phosphor (#33ff33) with proper glow effect
+   - Glyph cycling: Implement symbol changes in falling characters
+   - Cursor/tracer effect at bottom of each raindrop
+   - Brightness variation between characters
+
+3. **Implementation Approach for xterm.js:**
+   - Use terminal grid cells as our matrix grid
+   - Implement custom character set using xterm.js character support
+   - Utilize xterm.js cursor positioning for efficient updates
+   - Take advantage of bright and normal ANSI green colors for glow effect
+   - Use terminal's built-in cursor for the "tracer" effect
+
+4. **Customization Parameters:**
+   - Animation speed
+   - Fall speed
+   - Symbol change rate
+   - Column density
+   - Glow intensity
+
+5. **Performance Considerations:**
+   - Buffer updates to minimize terminal renders
+   - Optimize grid calculations
+   - Use efficient data structures for tracking raindrops
+   - Implement frame rate limiting to prevent terminal overload
+
+**Rationale:**
+- The grid-based approach with stationary symbols matches xterm.js's character grid nature
+- Using terminal native features (cursor, colors) ensures better performance
+- Customization parameters allow for future tweaking and user preferences
+- Performance considerations are crucial for smooth terminal operation
+
+**Implementation Plan:**
+1. Create core rain effect module in `/src/features/matrix`
+2. Implement basic grid and raindrop management
+3. Add glow and color effects using xterm.js capabilities
+4. Integrate with terminal idle detection
+5. Add customization options through terminal commands
+
+**Impact:**
+- This approach allows us to maintain the authentic Matrix look while working within terminal constraints
+- Performance optimizations ensure smooth operation alongside other terminal features
+- Customization options provide flexibility for future enhancements
+
+**Alternative Approaches Considered:**
+1. Canvas-based implementation: Rejected due to integration complexity with xterm.js
+2. Pure CSS animation: Rejected due to limited control and performance concerns
+3. Web component: Rejected to maintain terminal-first approach
+
+**Dependencies:**
+- xterm.js terminal capabilities
+- Terminal color support
+- Performance characteristics of the host system
+
+**Future Considerations:**
+- Potential for additional visual effects (ripples, glitches)
+- Mobile device performance optimization
+- Theme variation support

@@ -4,7 +4,27 @@ import { MATRIX_CHARS } from './types';
  * Character cycling and glyph management utilities for the Matrix rain effect
  */
 
-const ESC = '\x1b';
+// xterm-256 color codes for matrix effect
+const GREEN_COLORS = [
+  22,  // Darkest green
+  28,  // Dark green
+  34,  // Medium green
+  40,  // Bright green
+  46,  // Brightest green
+  231  // White (for highest brightness)
+];
+
+/**
+ * Get a matrix color code based on brightness
+ */
+export function getMatrixColor(brightness: number): string {
+  // Map brightness to color index
+  const index = Math.min(
+    GREEN_COLORS.length - 1,
+    Math.floor(brightness * (GREEN_COLORS.length - 1))
+  );
+  return `[38;5;${GREEN_COLORS[index]}m`;
+}
 
 /**
  * Get a random character from the Matrix character set
@@ -31,37 +51,14 @@ export function cycleCharacter(current: string): string {
 }
 
 /**
- * Format a character with ANSI escape codes for color and brightness
- */
-export function formatMatrixChar(
-  char: string, 
-  brightness: number,
-  config: { glowIntensity: number }
-): string {
-  // Apply glow intensity to brightness
-  const adjustedBrightness = brightness * config.glowIntensity;
-  
-  if (adjustedBrightness > 0.8) {
-    // Bright white for highest intensity
-    return `${ESC}[1;97m${char}${ESC}[0m`;
-  } else if (adjustedBrightness > 0.6) {
-    // Bright green for high intensity
-    return `${ESC}[1;32m${char}${ESC}[0m`;
-  } else if (adjustedBrightness > 0.3) {
-    // Normal green for medium intensity
-    return `${ESC}[32m${char}${ESC}[0m`;
-  } else {
-    // Dark green for low intensity
-    return `${ESC}[38;5;22m${char}${ESC}[0m`;
-  }
-}
-
-/**
  * Generate brightness values for a raindrop trail
+ * Creates a smooth gradient from head to tail
  */
 export function generateBrightnessGradient(length: number): number[] {
   return new Array(length).fill(0).map((_, i) => {
-    return Math.pow(1 - (i / length), 2);
+    // Use cubic easing for smoother gradient
+    const t = i / (length - 1);
+    return Math.pow(1 - t, 3);
   });
 }
 
@@ -82,18 +79,22 @@ export function calculateBrightness(
 }
 
 /**
- * Create terminal cursor movement sequence
+ * Create cursor movement sequence
  */
 export function createCursorMovement(row: number, col: number): string {
-  return `${ESC}[${row + 1};${col + 1}H`;
+  return `[${row + 1};${col + 1}H`;
 }
 
 /**
- * Create a smooth easing function for animations
+ * Reset color attributes
  */
-export function createEasing(start: number, end: number, steps: number): number[] {
-  return new Array(steps).fill(0).map((_, i) => {
-    const t = i / (steps - 1);
-    return start + (end - start) * (1 - Math.pow(1 - t, 2));
-  });
+export function resetColor(): string {
+  return '[0m';
+}
+
+/**
+ * Clamp a number between a minimum and maximum value
+ */
+export function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }

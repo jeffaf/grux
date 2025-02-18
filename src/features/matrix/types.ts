@@ -28,11 +28,11 @@ export interface Raindrop {
 export const DEFAULT_CONFIG: MatrixConfig = {
   columns: 80,          // Default terminal width
   rows: 24,            // Default terminal height
-  animationSpeed: 0.5,  // Slower default speed
-  fallSpeed: 0.5,      // Slower fall speed
-  cycleSpeed: 0.3,     // Slower character cycling
-  density: 0.2,        // Lower density for clearer effect
-  glowIntensity: 1.0,  // Full glow intensity
+  animationSpeed: 0.2,  // Significantly slower default speed
+  fallSpeed: 0.3,      // Slower fall speed
+  cycleSpeed: 0.2,     // Slower character cycling
+  density: 0.1,        // Lower density for clearer effect
+  glowIntensity: 1.0,  // Full glow intensity for better visibility
   maxRows: 12          // Only use top half of screen
 };
 

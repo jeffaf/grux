@@ -1,7 +1,6 @@
 import { Terminal } from 'xterm';
 import { MatrixConfig, Raindrop, DEFAULT_CONFIG, MATRIX_CHARS } from './types';
-
-const ESC = '\x1b';
+import { getRandomMatrixChar } from './utils';
 
 export class MatrixRain {
   private config: MatrixConfig;
@@ -11,6 +10,15 @@ export class MatrixRain {
   private animationFrameId: number | null = null;
   private lastFrameTime: number = 0;
   public isRunning: boolean = false;
+
+  // Control sequences with escape character
+  private readonly ESC = '\x1b';
+  private readonly CURSOR_POS_PREFIX = this.ESC + '[';
+  private readonly COLOR_WHITE = this.ESC + '[97m';
+  private readonly COLOR_BRIGHT_GREEN = this.ESC + '[92m';
+  private readonly COLOR_GREEN = this.ESC + '[32m';
+  private readonly COLOR_DARK_GREEN = this.ESC + '[38;5;22m';
+  private readonly COLOR_RESET = this.ESC + '[0m';
 
   constructor(terminal: Terminal, config: Partial<MatrixConfig> = {}) {
     this.terminal = terminal;
@@ -79,7 +87,7 @@ export class MatrixRain {
         if (y < 0) continue;
 
         // Get random character
-        const char = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
+        const char = getRandomMatrixChar();
         this.gridState[y][drop.column] = char;
 
         // Calculate brightness based on position in the drop
@@ -96,19 +104,29 @@ export class MatrixRain {
   private renderCharacter(row: number, col: number, char: string, brightness: number): void {
     if (row >= this.config.maxRows) return;
 
-    let colorCode: string;
+    // Move cursor to position
+    this.terminal.write(this.CURSOR_POS_PREFIX + `${row + 1};${col + 1}H`);
 
+    // Set color based on brightness
     if (brightness > 0.8) {
-      colorCode = `${ESC}[1;97m`; // Bright white
+      // Bright white
+      this.terminal.write(this.COLOR_WHITE);
     } else if (brightness > 0.6) {
-      colorCode = `${ESC}[1;32m`; // Bright green
+      // Bright green
+      this.terminal.write(this.COLOR_BRIGHT_GREEN);
     } else if (brightness > 0.3) {
-      colorCode = `${ESC}[32m`;   // Normal green
+      // Normal green
+      this.terminal.write(this.COLOR_GREEN);
     } else {
-      colorCode = `${ESC}[38;5;22m`; // Dark green
+      // Dark green
+      this.terminal.write(this.COLOR_DARK_GREEN);
     }
 
-    this.terminal.write(`${ESC}[${row + 1};${col + 1}H${colorCode}${char}${ESC}[0m`);
+    // Write character
+    this.terminal.write(char);
+
+    // Reset color
+    this.terminal.write(this.COLOR_RESET);
   }
 
   private animate(timestamp: number): void {

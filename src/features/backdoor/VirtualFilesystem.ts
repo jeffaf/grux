@@ -1,6 +1,15 @@
 import { VirtualFSEntry, VirtualFile, VirtualDirectory, PathResolutionOptions } from './types';
+import { HACKER_ART } from './art';
 
-const INSTALL_GUIDE = `# Ubuntu Installation Guide
+const virtualFiles: Record<string, string> = {
+  "README.md": "# GRUX Terminal\n\nA retro-styled terminal interface with Matrix rain animation.\n\n## Features\n- Matrix-style digital rain\n- Basic terminal commands\n- Idle animation\n\n## Usage\nType \"help\" for available commands.",
+  "config.json": "{\n  \"terminal\": {\n    \"theme\": \"matrix\",\n    \"fontSize\": 14,\n    \"idleTimeout\": 30000\n  }\n}",
+  "Projects/hello.txt": "Hello from the virtual filesystem!\nThis is a simulated text file.",
+  "etc/passwd": "root:x:0:0:Too late lamer:/root:/bin/grux\nneo:x:1337:1337:The One:/dev/matrix:/bin/zsh\nhacker:x:31337:31337:1337 D0Gz:/home/hack:/bin/bash\nmorpheus:x:101:101:Free your mind:/usr/local/matrix:/bin/red-pill\nsmith:x:666:666:Me...me...me...:/tmp/matrix:/bin/virus\ntank:x:102:102:Operator:/var/matrix/construct:/bin/load\ndozer:x:103:103:Not like this:/var/matrix/nebuchadnezzar:/bin/die\nswitch:x:104:104:Such a pretty face:/var/matrix/resistance:/bin/fight\nmouse:x:105:105:Everything is a test:/var/matrix/training:/bin/jump\ncypher:x:999:999:Ignorance is bliss:/tmp/steak:/bin/betray",
+  "/etc/passwd": "root:x:0:0:Too late lamer:/root:/bin/grux\nneo:x:1337:1337:The One:/dev/matrix:/bin/zsh\nhacker:x:31337:31337:1337 D0Gz:/home/hack:/bin/bash\nmorpheus:x:101:101:Free your mind:/usr/local/matrix:/bin/red-pill\nsmith:x:666:666:Me...me...me...:/tmp/matrix:/bin/virus\ntank:x:102:102:Operator:/var/matrix/construct:/bin/load\ndozer:x:103:103:Not like this:/var/matrix/nebuchadnezzar:/bin/die\nswitch:x:104:104:Such a pretty face:/var/matrix/resistance:/bin/fight\nmouse:x:105:105:Everything is a test:/var/matrix/training:/bin/jump\ncypher:x:999:999:Ignorance is bliss:/tmp/steak:/bin/betray",
+  "etc/shadow": "Access denied: Nice try! ;)",
+  "/etc/shadow": "Access denied: Nice try! ;)",
+  "home/hacker/docs/INSTALL.md": `# Ubuntu Installation Guide
 
 ## Prerequisites
 - USB drive (8GB or larger)
@@ -24,105 +33,73 @@ const INSTALL_GUIDE = `# Ubuntu Installation Guide
 5. Wait for completion
 
 ### Using Terminal (Linux/Mac):
-1. Find USB device:
-   \`\`\`
-   lsblk
-   \`\`\`
-2. Unmount if mounted:
-   \`\`\`
-   sudo umount /dev/sdX
-   \`\`\`
-3. Write ISO:
-   \`\`\`
-   sudo dd bs=4M if=ubuntu-22.04-desktop-amd64.iso of=/dev/sdX status=progress
-   \`\`\`
+\`\`\`bash
+# Find USB device
+lsblk
+# Unmount if mounted
+sudo umount /dev/sdX
+# Write ISO
+sudo dd bs=4M if=ubuntu-22.04-desktop-amd64.iso of=/dev/sdX status=progress
+\`\`\`
 
-## Step 3: BIOS/UEFI Setup
+## Step 3: BIOS Setup
 1. Restart computer
-2. Enter BIOS (usually F2, F12, or Del)
+2. Enter BIOS (F2/F12/Del)
 3. Disable Secure Boot
-4. Set USB as first boot device
+4. Set USB first in boot order
 5. Save and exit
 
 ## Step 4: Installation
 1. Boot from USB
-2. Select "Try or Install Ubuntu"
-3. Choose your language
-4. Select "Install Ubuntu"
-5. Choose keyboard layout
-6. Choose:
-   - Normal installation
-   - Download updates
-   - Install third-party software
-7. Installation type:
-   - "Install alongside" (dual boot)
-   - "Erase disk" (single OS)
-   - "Something else" (manual partitioning)
-8. Select timezone
-9. Create user account
-10. Wait for installation
+2. Choose "Install Ubuntu"
+3. Follow the wizard
+4. Set up partitions
+5. Create user account
+6. Wait for completion
 
 ## Step 5: Post-Install
-1. Update system:
-   \`\`\`
-   sudo apt update
-   sudo apt upgrade
-   \`\`\`
-2. Install essential packages:
-   \`\`\`
-   sudo apt install build-essential git curl wget
-   \`\`\`
-3. Install graphics drivers:
-   \`\`\`
-   ubuntu-drivers devices
-   sudo ubuntu-drivers autoinstall
-   \`\`\`
-4. Configure firewall:
-   \`\`\`
-   sudo ufw enable
-   \`\`\`
+\`\`\`bash
+# Update system
+sudo apt update
+sudo apt upgrade
 
-## Common Issues
-1. Black screen: Add 'nomodeset' to kernel parameters
-2. Wi-Fi not working: Install additional drivers
-3. Grub not found: Boot-repair from live USB
+# Install essentials
+sudo apt install build-essential git vim
 
-## Security Tips
-1. Enable automatic updates
-2. Set up UFW firewall
-3. Install ClamAV antivirus
-4. Enable disk encryption
-5. Regular system updates
+# Set up firewall
+sudo ufw enable
 
-## Useful Commands
-1. System update:
-   \`\`\`
-   sudo apt update && sudo apt upgrade
-   \`\`\`
-2. Install package:
-   \`\`\`
-   sudo apt install package-name
-   \`\`\`
-3. Remove package:
-   \`\`\`
-   sudo apt remove package-name
-   \`\`\`
-4. System information:
-   \`\`\`
-   neofetch  # install first: sudo apt install neofetch
-   \`\`\`
+# Install graphics drivers
+ubuntu-drivers autoinstall
+\`\`\`
 
 ## Need Help?
-- Ubuntu Forums: https://ubuntuforums.org
-- Ask Ubuntu: https://askubuntu.com
-- Ubuntu Wiki: https://wiki.ubuntu.com
-- IRC: #ubuntu on Libera.Chat`;
+- Ubuntu Forums
+- Ask Ubuntu
+- Wiki Ubuntu
+- IRC: #ubuntu
+`
+};
+
+const passwdAliases = [
+  "etc/passwd",
+  "/etc/passwd",
+  "passwd",
+  "/passwd",
+  "../etc/passwd",
+  "../../etc/passwd",
+  "../../../etc/passwd",
+  "../../../../etc/passwd",
+  "/var/etc/passwd",
+  "/var/passwd",
+  "%2fetc%2fpasswd",
+  "....//....//etc/passwd"
+];
 
 export class VirtualFilesystem {
   private root: VirtualDirectory;
 
   constructor() {
-    // Initialize root directory
     this.root = {
       type: 'directory',
       entries: {},
@@ -137,24 +114,24 @@ export class VirtualFilesystem {
   }
 
   private createBasicStructure() {
-    // Create basic directory structure
-    this.mkdir('/bin');
-    this.mkdir('/etc');
-    this.mkdir('/home');
-    this.mkdir('/home/hacker');
-    this.mkdir('/var');
-    this.mkdir('/var/log');
-    this.mkdir('/usr');
-    this.mkdir('/usr/local');
-    this.mkdir('/etc/ssh');
-    this.mkdir('/home/hacker/docs');
+    // Create directories
+    [
+      '/bin',
+      '/etc',
+      '/home',
+      '/home/hacker',
+      '/var',
+      '/var/log',
+      '/usr',
+      '/usr/local',
+      '/etc/ssh',
+      '/home/hacker/docs'
+    ].forEach(dir => this.mkdir(dir));
 
-    // Create some initial files
-    this.writeFile('/etc/hostname', 'matrix-defense-system\n');
-    this.writeFile('/etc/passwd', 'root:x:0:0:root:/root:/bin/bash\nhacker:x:1000:1000:Matrix Hacker:/home/hacker:/bin/bash\n');
-    this.writeFile('/home/hacker/.bashrc', '# ~/.bashrc\nPS1="\\u@\\h:\\w\\$ "\nPATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"\n');
-    this.writeFile('/home/hacker/secret_plans.txt', 'TODO: Find a way to hack into the mainframe...\nNote: The system seems to be running on something called "The Matrix"?\n');
-    this.writeFile('/home/hacker/docs/INSTALL.md', INSTALL_GUIDE);
+    // Create files
+    Object.entries(virtualFiles).forEach(([path, content]) => {
+      this.writeFile(path, content);
+    });
   }
 
   public resolvePath(path: string, options: PathResolutionOptions = {}): VirtualFSEntry | null {
@@ -162,20 +139,12 @@ export class VirtualFilesystem {
     let current: VirtualFSEntry = this.root;
     
     if (path.startsWith('/')) {
-      // Absolute path
-      current = this.root;
-    } else {
-      // Relative path - would need current working directory context
-      // For now, treat as absolute
       current = this.root;
     }
 
     for (const part of parts) {
       if (part === '.' || part === '') continue;
-      if (part === '..') {
-        // Handle parent directory
-        continue;
-      }
+      if (part === '..') continue;
 
       if (current.type !== 'directory') {
         return null;
@@ -184,7 +153,6 @@ export class VirtualFilesystem {
       const next = current.entries[part];
       if (!next) {
         if (options.createMissing) {
-          // Create missing directories if specified
           current.entries[part] = {
             type: 'directory',
             entries: {},

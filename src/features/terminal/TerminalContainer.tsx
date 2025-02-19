@@ -6,6 +6,33 @@ import 'xterm/css/xterm.css';
 
 const IDLE_TIMEOUT = 30000;
 
+// Virtual filesystem for demo purposes
+const virtualFiles: Record<string, string> = {
+  "README.md": "# GRUX Terminal\n\nA retro-styled terminal interface with Matrix rain animation.\n\n## Features\n- Matrix-style digital rain\n- Basic terminal commands\n- Idle animation\n\n## Usage\nType \"help\" for available commands.",
+  "config.json": "{\n  \"terminal\": {\n    \"theme\": \"matrix\",\n    \"fontSize\": 14,\n    \"idleTimeout\": 30000\n  }\n}",
+  "Projects/hello.txt": "Hello from the virtual filesystem!\nThis is a simulated text file.",
+  "etc/passwd": "root:x:0:0:Too late lamer:/root:/bin/grux\nneo:x:1337:1337:The One:/dev/matrix:/bin/zsh\nhacker:x:31337:31337:1337 D0Gz:/home/hack:/bin/bash\nmorpheus:x:101:101:Free your mind:/usr/local/matrix:/bin/red-pill\nsmith:x:666:666:Me...me...me...:/tmp/matrix:/bin/virus\ntank:x:102:102:Operator:/var/matrix/construct:/bin/load\ndozer:x:103:103:Not like this:/var/matrix/nebuchadnezzar:/bin/die\nswitch:x:104:104:Such a pretty face:/var/matrix/resistance:/bin/fight\nmouse:x:105:105:Everything is a test:/var/matrix/training:/bin/jump\ncypher:x:999:999:Ignorance is bliss:/tmp/steak:/bin/betray",
+  "/etc/passwd": "root:x:0:0:Too late lamer:/root:/bin/grux\nneo:x:1337:1337:The One:/dev/matrix:/bin/zsh\nhacker:x:31337:31337:1337 D0Gz:/home/hack:/bin/bash\nmorpheus:x:101:101:Free your mind:/usr/local/matrix:/bin/red-pill\nsmith:x:666:666:Me...me...me...:/tmp/matrix:/bin/virus\ntank:x:102:102:Operator:/var/matrix/construct:/bin/load\ndozer:x:103:103:Not like this:/var/matrix/nebuchadnezzar:/bin/die\nswitch:x:104:104:Such a pretty face:/var/matrix/resistance:/bin/fight\nmouse:x:105:105:Everything is a test:/var/matrix/training:/bin/jump\ncypher:x:999:999:Ignorance is bliss:/tmp/steak:/bin/betray",
+  "etc/shadow": "Access denied: Nice try! ;)",
+  "/etc/shadow": "Access denied: Nice try! ;)"
+};
+
+// Common passwd file paths users might try
+const passwdAliases = [
+  "etc/passwd",
+  "/etc/passwd",
+  "passwd",
+  "/passwd",
+  "../etc/passwd",
+  "../../etc/passwd",
+  "../../../etc/passwd",
+  "../../../../etc/passwd",
+  "/var/etc/passwd",
+  "/var/passwd",
+  "%2fetc%2fpasswd",
+  "....//....//etc/passwd"
+];
+
 const containerStyle: React.CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -88,6 +115,7 @@ const TerminalContainer: React.FC = () => {
   const fitAddon = useRef<FitAddon | null>(null);
   const matrixRain = useRef<MatrixRain | null>(null);
   const lineReader = useRef<TerminalLineReader | null>(null);
+  const mouseMoveHandler = useRef<(() => void) | null>(null);
 
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActivityTime = useRef<number>(Date.now());
@@ -170,16 +198,17 @@ const TerminalContainer: React.FC = () => {
         writeLines(
           [
             "Available commands:",
-            "  help            - Show this help message",
-            "  ls, dir        - List files in current directory",
-            "  clear          - Clear the terminal screen",
-            "  echo [text]    - Display text in terminal",
-            "  version        - Show terminal version",
-            "  matrix         - Start Matrix rain animation",
-            "  matrix speed   - Set matrix animation speed (0.1-2.0)",
-            "  matrix density - Set raindrop density (0.1-1.0)",
-            "  stop           - Stop Matrix rain animation",
-            "  exit           - Clear screen and reset terminal",
+            "  help              - Show this help message",
+            "  ls, dir          - List files in current directory",
+            "  cat [file]       - Display contents of a file",
+            "  clear            - Clear the terminal screen",
+            "  echo [text]      - Display text in terminal",
+            "  version          - Show terminal version",
+            "  matrix           - Start Matrix rain animation",
+            "  matrix speed     - Set matrix animation speed (0.1-2.0)",
+            "  matrix density   - Set raindrop density (0.1-1.0)",
+            "  stop             - Stop Matrix rain animation",
+            "  exit             - Clear screen and reset terminal",
           ],
           false
         );
@@ -193,6 +222,30 @@ const TerminalContainer: React.FC = () => {
         break;
       case "clear":
         terminal.current!.clear();
+        break;
+      case "cat":
+        if (args.length === 0) {
+          writeLines(["Usage: cat <filename>"], false);
+        } else {
+          const filename = args[0];
+          // Check if this is a passwd file attempt
+          if (passwdAliases.includes(filename) ||
+              filename.toLowerCase().includes('passwd')) {
+            const content = virtualFiles["/etc/passwd"].split('\n');
+            writeLines(content, false);
+          } else if (filename.toLowerCase().includes('shadow')) {
+            writeLines([virtualFiles["/etc/shadow"]], false);
+          } else {
+            // Regular file handling
+            const sanitizedFilename = filename.replace(/[^a-zA-Z0-9./\-_]/g, '');
+            if (Object.prototype.hasOwnProperty.call(virtualFiles, sanitizedFilename)) {
+              const content = virtualFiles[sanitizedFilename].split('\n');
+              writeLines(content, false);
+            } else {
+              writeLines([`cat: ${sanitizedFilename}: No such file or directory`], false);
+            }
+          }
+        }
         break;
       case "echo":
         writeLines([args.join(" ")], false);
@@ -266,6 +319,21 @@ const TerminalContainer: React.FC = () => {
             matrixRain.current.resize(cols, rows);
           }
         });
+
+        // Stop matrix effect on any key press
+        terminal.current.onKey(() => {
+          if (matrixRain.current?.isRunning) {
+            stopMatrixRain();
+          }
+        });
+
+        // Stop matrix effect on mouse movement
+        mouseMoveHandler.current = () => {
+          if (matrixRain.current?.isRunning) {
+            stopMatrixRain();
+          }
+        };
+        terminalRef.current.addEventListener("mousemove", mouseMoveHandler.current);
         try {
           await new Promise(resolve => requestAnimationFrame(resolve));
           fitAddon.current!.fit();
@@ -297,7 +365,8 @@ const TerminalContainer: React.FC = () => {
       if (fitAddon.current) fitAddon.current.dispose();
       if (lineReader.current) lineReader.current.dispose();
       if (terminal.current) terminal.current.dispose();
-      if (terminalRef.current) {
+      if (terminalRef.current && mouseMoveHandler.current) {
+        terminalRef.current.removeEventListener("mousemove", mouseMoveHandler.current);
         terminalRef.current.removeEventListener("click", () => {});
       }
     };

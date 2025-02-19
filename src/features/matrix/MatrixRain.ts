@@ -45,7 +45,7 @@ export class MatrixRain {
   private createRaindrop(): Raindrop {
     const column = Math.floor(Math.random() * this.config.columns);
     const length = Math.floor(Math.random() * 8) + 6; // Random length between 6-13
-    const speed = (Math.random() * 0.4 + 0.2) * this.config.fallSpeed; // More consistent speeds
+    const speed = (Math.random() * 0.8 + 0.6) * this.config.fallSpeed; // Faster base speed with good variation
 
     // Use cubic easing for smoother gradient (matching utils.ts)
     const brightnesses = new Array(length).fill(0).map((_, i) => {

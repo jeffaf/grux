@@ -22,11 +22,11 @@ export interface Raindrop {
 export const DEFAULT_CONFIG: MatrixConfig = {
   columns: 80,
   rows: 24,
-  animationSpeed: 1,
-  fallSpeed: 1,
-  density: 0.5, // Reduced for better performance
+  animationSpeed: 2,    // Double the animation speed
+  fallSpeed: 2.5,       // Increase fall speed
+  density: 0.8,         // Higher density for more raindrops
   glowIntensity: 0.8,
-  maxRaindrops: 50, // Limit for performance
+  maxRaindrops: 100,    // Double the maximum raindrops
 };
 
 // Define the character set for the Matrix rain

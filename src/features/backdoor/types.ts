@@ -33,6 +33,7 @@ export interface CommandResult {
   output: string[];
   error?: string;
   exitCode: number;
+  delayedOutput?: boolean;
 }
 
 // Options for ls command

@@ -1,5 +1,10 @@
 import { VirtualFilesystem } from './VirtualFilesystem';
 import { CommandResult, EnvVars, LsOptions } from './types';
+import { HACKER_ART } from './art';
+
+export interface BackdoorCommandResult extends CommandResult {
+  shouldExit?: boolean;
+}
 
 export class VirtualLinuxEnvironment {
   private fs: VirtualFilesystem;
@@ -23,7 +28,7 @@ export class VirtualLinuxEnvironment {
     };
   }
 
-  public execCommand(cmdLine: string): CommandResult {
+  public execCommand(cmdLine: string): BackdoorCommandResult {
     const parts = this.parseCommandLine(cmdLine);
     if (parts.length === 0) {
       return { output: [], exitCode: 0 };
@@ -32,6 +37,15 @@ export class VirtualLinuxEnvironment {
     const [cmd, ...args] = parts;
     
     try {
+      // Handle exit/back commands first
+      if (cmd === 'exit' || cmd === 'back') {
+        return {
+          output: ['Leaving Matrix Defense System...'],
+          exitCode: 0,
+          shouldExit: true
+        };
+      }
+
       switch (cmd) {
         case 'pwd':
           return this.pwd();
@@ -51,8 +65,14 @@ export class VirtualLinuxEnvironment {
           return this.uname(args);
         case 'ps':
           return this.ps();
+        case 'neofetch':
+          return this.neofetch();
+        case 'hack':
+          return this.hack();
+        case 'help':
+          return this.help();
         case 'clear':
-          return { output: ['\x1bc'], exitCode: 0 }; // ANSI escape sequence to clear screen
+          return { output: ['c'], exitCode: 0 }; // 'c' will be interpreted as clear screen
         default:
           return {
             output: [`${cmd}: command not found`],
@@ -67,28 +87,122 @@ export class VirtualLinuxEnvironment {
     }
   }
 
-  private parseCommandLine(cmdLine: string): string[] {
-    // Basic command line parsing, can be expanded for more complex cases
-    return cmdLine.trim().split(/\s+/).filter(Boolean);
-  }
+  private hack(): BackdoorCommandResult {
+    const esc = '';
+    const green = `${esc}[32m`;
+    const brightGreen = `${esc}[92m`;
+    const reset = `${esc}[0m`;
 
-  private resolvePath(path: string): string {
-    if (path.startsWith('/')) {
-      return path;
-    }
-    return `${this.cwd}/${path}`.replace(/\/+/g, '/');
-  }
+    const lines = HACKER_ART.split('\n').map(line =>
+      `${brightGreen}${line}${reset}`
+    );
 
-  // Command implementations
-  private pwd(): CommandResult {
+    // Add some dramatic text at the bottom
+    lines.push('');
+    lines.push(`${green}INITIATING SYSTEM HACK SEQUENCE...${reset}`);
+    lines.push(`${green}ACCESSING MAINFRAME...${reset}`);
+    lines.push(`${green}BYPASSING SECURITY PROTOCOLS...${reset}`);
+    lines.push(`${green}SYSTEM COMPROMISED${reset}`);
+
     return {
-      output: [this.cwd],
+      output: lines,
+      exitCode: 0,
+      delayedOutput: true // Enable typing effect for this command
+    };
+  }
+
+  private neofetch(): BackdoorCommandResult {
+    const esc = '\x1b';
+    const green = `${esc}[32m`;
+    const reset = `${esc}[0m`;
+    const bright = `${esc}[1m`;
+    const dim = `${esc}[2m`;
+
+    const logo = [
+      `${green}         ███╗   ███╗ █████╗ ████████╗██████╗ ██╗██╗  ██╗${reset}`,
+      `${green}         ████╗ ████║██╔══██╗╚══██╔══╝██╔══██╗██║╚██╗██╔╝${reset}`,
+      `${green}         ██╔████╔██║███████║   ██║   ██████╔╝██║ ╚███╔╝${reset}`,
+      `${green}         ██║╚██╔╝██║██╔══██║   ██║   ██╔══██╗██║ ██╔██╗${reset}`,
+      `${green}         ██║ ╚═╝ ██║██║  ██║   ██║   ██║  ██║██║██╔╝ ██╗${reset}`,
+      `${green}         ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝${reset}`,
+      `${dim}              Defense System v2.0 - Follow the white rabbit${reset}`,
+      ''
+    ];
+
+    const info = [
+      `${bright}OS:${reset} Matrix Defense System 2.0 (Ubuntu 22.04 base)`,
+      `${bright}Kernel:${reset} 5.15.0-matrix`,
+      `${bright}Uptime:${reset} 13337 days, 1 hour, 23 mins`,
+      `${bright}Packages:${reset} 1999 (dpkg)`,
+      `${bright}Shell:${reset} ${this.env.SHELL}`,
+      `${bright}Resolution:${reset} 1920x1080 @ 144Hz`,
+      `${bright}DE:${reset} Matrix Environment 3.0`,
+      `${bright}WM:${reset} Digital Rain`,
+      `${bright}Terminal:${reset} xterm-matrix`,
+      `${bright}CPU:${reset} Quantum i9-9999K (128) @ 4.2GHz`,
+      `${bright}GPU:${reset} Neural Graphics 4090 Ti`,
+      `${bright}Memory:${reset} 128GB / 256GB`,
+      `${bright}Local IP:${reset} 10.31.33.7`,
+      `${bright}System Status:${reset} Compromised`,
+      ''
+    ];
+
+    // Combine logo and info side by side
+    const output: string[] = [];
+    const maxLines = Math.max(logo.length, info.length);
+    for (let i = 0; i < maxLines; i++) {
+      const logoLine = logo[i] || '';
+      const infoLine = info[i] || '';
+      output.push(`${logoLine}${' '.repeat(5)}${infoLine}`);
+    }
+
+    return {
+      output,
       exitCode: 0
     };
   }
 
-  private cd(dir: string = this.env.HOME): CommandResult {
-    const target = this.resolvePath(dir || this.env.HOME);
+  private help(): BackdoorCommandResult {
+    return {
+      output: [
+        'Available commands:',
+        '  pwd               - Print working directory',
+        '  cd [dir]         - Change directory',
+        '  ls [-la]         - List directory contents',
+        '  cat [file]       - Display file contents',
+        '  echo [text]      - Display text',
+        '  whoami           - Print current user',
+        '  id               - Print user ID info',
+        '  uname [-a]       - Print system information',
+        '  ps               - List processes',
+        '  clear            - Clear screen',
+        '  help             - Show this help',
+        '  neofetch         - Display system information',
+        '  hack             - Initiate system hack sequence',
+        '  exit, back       - Return to normal terminal',
+      ],
+      exitCode: 0
+    };
+  }
+
+  private parseCommandLine(cmdLine: string): string[] {
+    return cmdLine.trim().split(/\s+/).filter(Boolean);
+  }
+
+  public getPrompt(): string {
+    return this.env.PS1
+      .replace('\\u', this.env.USER)
+      .replace('\\h', this.env.HOSTNAME)
+      .replace('\\w', this.cwd.replace(this.env.HOME, '~'))
+      .replace('\\$', this.env.USER === 'root' ? '#' : '$');
+  }
+
+  private pwd(): BackdoorCommandResult {
+    return { output: [this.cwd], exitCode: 0 };
+  }
+
+  private cd(dir: string = this.env.HOME): BackdoorCommandResult {
+    const target = dir.startsWith('/') ? dir : `${this.cwd}/${dir}`.replace(/\/+/g, '/');
     const entry = this.fs.resolvePath(target);
     
     if (!entry || entry.type !== 'directory') {
@@ -103,14 +217,13 @@ export class VirtualLinuxEnvironment {
     return { output: [], exitCode: 0 };
   }
 
-  private ls(args: string[]): CommandResult {
+  private ls(args: string[]): BackdoorCommandResult {
     const options: LsOptions = {
       all: false,
       long: false,
       human: false
     };
 
-    // Parse options
     const paths: string[] = [];
     for (const arg of args) {
       if (arg.startsWith('-')) {
@@ -126,7 +239,7 @@ export class VirtualLinuxEnvironment {
 
     const output: string[] = [];
     for (const path of paths) {
-      const resolvedPath = this.resolvePath(path);
+      const resolvedPath = path.startsWith('/') ? path : `${this.cwd}/${path}`.replace(/\/+/g, '/');
       const entry = this.fs.resolvePath(resolvedPath);
 
       if (!entry) {
@@ -136,30 +249,26 @@ export class VirtualLinuxEnvironment {
 
       if (entry.type === 'directory') {
         const entries = this.fs.listDir(resolvedPath);
-        for (const name of entries) {
-          if (!options.all && name.startsWith('.')) continue;
+        entries.sort().forEach(name => {
+          if (!options.all && name.startsWith('.')) return;
           const childEntry = this.fs.resolvePath(`${resolvedPath}/${name}`);
           if (childEntry) {
-            if (options.long) {
-              output.push(this.fs.formatListing(childEntry, name));
-            } else {
-              output.push(name + (childEntry.type === 'directory' ? '/' : ''));
-            }
+            output.push(options.long 
+              ? this.fs.formatListing(childEntry, name)
+              : name + (childEntry.type === 'directory' ? '/' : ''));
           }
-        }
+        });
       } else {
-        if (options.long) {
-          output.push(this.fs.formatListing(entry, path));
-        } else {
-          output.push(path);
-        }
+        output.push(options.long 
+          ? this.fs.formatListing(entry, path)
+          : path);
       }
     }
 
     return { output, exitCode: 0 };
   }
 
-  private cat(args: string[]): CommandResult {
+  private cat(args: string[]): BackdoorCommandResult {
     if (args.length === 0) {
       return {
         output: ['usage: cat [file...]'],
@@ -171,7 +280,7 @@ export class VirtualLinuxEnvironment {
     let exitCode = 0;
 
     for (const path of args) {
-      const resolvedPath = this.resolvePath(path);
+      const resolvedPath = path.startsWith('/') ? path : `${this.cwd}/${path}`.replace(/\/+/g, '/');
       const content = this.fs.readFile(resolvedPath);
       
       if (content === null) {
@@ -185,36 +294,28 @@ export class VirtualLinuxEnvironment {
     return { output, exitCode };
   }
 
-  private echo(args: string[]): CommandResult {
-    const output = args.map(arg => {
-      if (arg.startsWith('$')) {
-        const varName = arg.slice(1);
-        return this.env[varName] || '';
-      }
-      return arg;
-    }).join(' ');
-
+  private echo(args: string[]): BackdoorCommandResult {
     return {
-      output: [output],
+      output: [args.join(' ')],
       exitCode: 0
     };
   }
 
-  private whoami(): CommandResult {
+  private whoami(): BackdoorCommandResult {
     return {
       output: [this.env.USER],
       exitCode: 0
     };
   }
 
-  private id(): CommandResult {
+  private id(): BackdoorCommandResult {
     return {
       output: [`uid=1000(${this.env.USER}) gid=1000(${this.env.USER}) groups=1000(${this.env.USER})`],
       exitCode: 0
     };
   }
 
-  private uname(args: string[]): CommandResult {
+  private uname(args: string[]): BackdoorCommandResult {
     const info = {
       s: 'Linux',
       n: this.env.HOSTNAME,
@@ -239,7 +340,7 @@ export class VirtualLinuxEnvironment {
     };
   }
 
-  private ps(): CommandResult {
+  private ps(): BackdoorCommandResult {
     return {
       output: [
         'PID TTY          TIME CMD',
@@ -250,13 +351,5 @@ export class VirtualLinuxEnvironment {
       ],
       exitCode: 0
     };
-  }
-
-  public getPrompt(): string {
-    return this.env.PS1
-      .replace('\\u', this.env.USER)
-      .replace('\\h', this.env.HOSTNAME)
-      .replace('\\w', this.cwd.replace(this.env.HOME, '~'))
-      .replace('\\$', this.env.USER === 'root' ? '#' : '$');
   }
 }

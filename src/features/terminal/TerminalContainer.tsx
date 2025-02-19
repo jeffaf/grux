@@ -126,6 +126,10 @@ const TerminalContainer: React.FC = () => {
 
   const enterBackdoorMode = useCallback(() => {
     if (!terminal.current) return;
+    
+    // Set focus before anything else
+    terminal.current.focus();
+    
     virtualEnv.current = new VirtualLinuxEnvironment();
     setIsBackdoorMode(true);
     terminal.current.clear();
@@ -135,9 +139,13 @@ const TerminalContainer: React.FC = () => {
       "Initializing secure shell...",
       "Connecting to mainframe...",
       "Connected.",
+      "",
+      "Type 'help' for available commands.",
+      "TIP: Check out the installation guide at ~/docs/INSTALL.md",
       ""
     ], false);
     terminal.current.write(virtualEnv.current.getPrompt());
+    terminal.current.focus();
   }, []);
 
   const writeLines = useCallback((lines: string[], addPrompt: boolean = true) => {
@@ -223,7 +231,35 @@ const TerminalContainer: React.FC = () => {
     // Handle backdoor mode differently
     if (isBackdoorMode && virtualEnv.current) {
       const result = virtualEnv.current.execCommand(cmd);
-      writeLines(result.output, true);
+      if (result.shouldExit) {
+        setIsBackdoorMode(false);
+        virtualEnv.current = null;
+        terminal.current.clear();
+        writeLines(['Returned to GRUX Terminal.']);
+        terminal.current.focus();
+      } else if (result.delayedOutput) {
+        // Handle delayed output with typing effect
+        (async () => {
+          for (const line of result.output) {
+            if (line.includes('INITIATING') || line.includes('ACCESSING') ||
+                line.includes('BYPASSING') || line.includes('COMPROMISED')) {
+              // Type each character of the status messages
+              for (let i = 0; i < line.length; i++) {
+                terminal.current?.write(line[i]);
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+              terminal.current?.write('\r\n');
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } else {
+              // Print ASCII art lines instantly
+              terminal.current?.writeln(line);
+            }
+          }
+          terminal.current?.write(virtualEnv.current?.getPrompt() || '');
+        })();
+      } else {
+        writeLines(result.output, true);
+      }
       return;
     }
 

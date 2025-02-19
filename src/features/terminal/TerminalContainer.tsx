@@ -6,6 +6,27 @@ import 'xterm/css/xterm.css';
 
 const IDLE_TIMEOUT = 30000; // 30 seconds before matrix activates
 
+const containerStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: '#000',
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const terminalStyle: React.CSSProperties = {
+  flex: 1,
+  padding: '10px',
+  minHeight: '400px', // Ensure minimum height
+  minWidth: '600px',  // Ensure minimum width
+  boxSizing: 'border-box',
+  backgroundColor: '#000',
+  overflow: 'hidden',
+};
+
 const TerminalContainer: React.FC = () => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
@@ -15,14 +36,15 @@ const TerminalContainer: React.FC = () => {
   const [currentInput, setCurrentInput] = useState('');
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActivityTime = useRef<number>(Date.now());
+  const [isTerminalReady, setIsTerminalReady] = useState(false);
 
   const writeLines = (lines: string[], addPrompt: boolean = true) => {
     if (!terminal.current) return;
-    
+
     lines.forEach(line => {
       terminal.current?.writeln(line);
     });
-    
+
     if (addPrompt) {
       terminal.current.write('grux> ');
     }
@@ -43,43 +65,61 @@ const TerminalContainer: React.FC = () => {
 
   // Matrix rain effect
   const startMatrixRain = () => {
-    if (!terminal.current || matrixRain.current?.isRunning) return;
-    
-    if (!matrixRain.current) {
+    console.log('Attempting to start matrix rain:', {
+      terminalExists: !!terminal.current,
+      isRunning: matrixRain.current?.isRunning,
+      isReady: isTerminalReady,
+      cols: terminal.current?.cols,
+      rows: terminal.current?.rows
+    });
+
+    if (!terminal.current || matrixRain.current?.isRunning || !isTerminalReady) {
+      console.log('Cannot start matrix rain - conditions not met');
+      return;
+    }
+
+    try {
+      // Initialize MatrixRain with current terminal dimensions
+      console.log('Creating new MatrixRain instance');
       matrixRain.current = new MatrixRain(terminal.current, {
         columns: terminal.current.cols,
         rows: terminal.current.rows,
-        maxRows: Math.floor(terminal.current.rows / 2) // Use only top half
       });
-    }
 
-    // Set up terminal
-    terminal.current.options.cursorBlink = false;
-    terminal.current.clear();
-    writeLines(['Starting Matrix rain animation...'], false);
-    
-    matrixRain.current.start();
+      // Set up terminal: hide cursor
+      terminal.current.options.cursorBlink = false;
+
+      console.log('Starting matrix rain animation');
+      matrixRain.current.start();
+    } catch (error) {
+      console.error('Error starting matrix rain:', error);
+    }
   };
 
   // Stop matrix rain
   const stopMatrixRain = () => {
+    console.log('Stopping matrix rain');
     if (matrixRain.current) {
       matrixRain.current.stop();
       matrixRain.current.cleanup();
+      matrixRain.current = null; // Ensure it's reinitialized next time
     }
     if (terminal.current) {
       terminal.current.options.cursorBlink = true;
       terminal.current.clear();
-      writeLines(['Matrix rain stopped']);
+      writeLines(['Matrix rain stopped']); // Includes prompt
     }
     resetIdleTimer();
   };
 
   const handleCommand = (command: string) => {
     if (!terminal.current) return;
-    
+
     const args = command.trim().split(/\s+/);
     const commandName = args[0].toLowerCase();
+    let prompt = true;
+
+    console.log('Handling command:', commandName, args);
 
     switch (commandName) {
       case 'help':
@@ -95,9 +135,9 @@ const TerminalContainer: React.FC = () => {
           '  matrix density - Set raindrop density (0.1-1.0)',
           '  stop           - Stop Matrix rain animation',
           '  exit           - Clear screen and reset terminal'
-        ]);
+        ], false);
         break;
-      
+
       case 'ls':
       case 'dir':
         writeLines([
@@ -106,23 +146,23 @@ const TerminalContainer: React.FC = () => {
           'Projects/',
           'README.md',
           'config.json'
-        ]);
+        ], false);
         break;
-      
+
       case 'clear':
         terminal.current.clear();
         terminal.current.write('grux> ');
         break;
-      
+
       case 'echo':
         const text = args.slice(1).join(' ');
-        writeLines([text || '']);
+        writeLines([text || ''], false);
         break;
-      
+
       case 'version':
-        writeLines(['GRUX Terminal v1.0.0']);
+        writeLines(['GRUX Terminal v1.0.0'], false);
         break;
-      
+
       case 'matrix':
         if (args[1] === 'speed' && args[2]) {
           const speed = parseFloat(args[2]);
@@ -141,130 +181,130 @@ const TerminalContainer: React.FC = () => {
             writeLines(['Invalid density value. Use a number between 0.1 and 1.0']);
           }
         } else {
+          console.log('Starting matrix rain from command');
           startMatrixRain();
+          prompt = false;
         }
         break;
-      
+
       case 'stop':
-        if (matrixRain.current?.isRunning) {
-          stopMatrixRain();
-        } else {
-          writeLines(['No animation is currently running.']);
-        }
+        stopMatrixRain();
         break;
-      
+
       case 'exit':
         terminal.current.clear();
-        writeLines(['Terminal reset.']);
+        writeLines(['Terminal reset.'], false);
         break;
-      
+
       default:
         if (command.trim()) {
           writeLines([`Command not found: ${commandName}`]);
-        } else {
-          terminal.current.write('grux> ');
         }
+    }
+    if (prompt) {
+      terminal.current.write('grux> ');
     }
   };
 
   useEffect(() => {
-    // Initialize terminal
-    terminal.current = new Terminal({
-      rows: 24,
-      cols: 80,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 14,
-      theme: {
-        background: '#000000',
-        foreground: '#33ff33',
-        cursor: '#33ff33'
-      },
-      cursorBlink: true,
-      allowTransparency: true,
-    });
-
-    // Initialize fit addon
-    fitAddon.current = new FitAddon();
-    terminal.current.loadAddon(fitAddon.current);
-
-    if (terminalRef.current) {
-      // Open terminal
-      terminal.current.open(terminalRef.current);
-      
-      // Initial fit
-      setTimeout(() => {
-        fitAddon.current?.fit();
-        // Initialize matrix rain with correct dimensions
-        if (terminal.current) {
-          matrixRain.current = new MatrixRain(terminal.current, {
-            columns: terminal.current.cols,
-            rows: terminal.current.rows,
-            maxRows: Math.floor(terminal.current.rows / 2)
-          });
-        }
-      }, 100);
-
-      const handleResize = () => {
-        fitAddon.current?.fit();
-        if (terminal.current && matrixRain.current) {
-          matrixRain.current.resize(terminal.current.cols, terminal.current.rows);
-        }
-      };
-
-      window.addEventListener('resize', handleResize);
-
-      // Write welcome message
-      writeLines([
-        'Welcome to GRUX Terminal!',
-        'Type "help" for a list of available commands.',
-        ''
-      ]);
-
-      // Handle input
-      terminal.current.onData((data) => {
-        resetIdleTimer(); // Reset idle timer on any input
-
-        if (matrixRain.current?.isRunning) {
-          if (data.toLowerCase() === 'stop') {
-            stopMatrixRain();
-          }
-          return;
-        }
-
-        if (data === '\r') { // Enter pressed
-          terminal.current?.write('\r\n');
-          handleCommand(currentInput);
-          setCommandHistory(prev => [...prev, currentInput]);
-          setCurrentInput('');
-        } else if (data === '') { // Backspace
-          if (currentInput.length > 0) {
-            terminal.current?.write('\b \b');
-            setCurrentInput(prev => prev.slice(0, -1));
-          }
-        } else { // Regular input
-          terminal.current?.write(data);
-          setCurrentInput(prev => prev + data);
-        }
+    const initializeTerminal = async () => {
+      console.log('Initializing terminal');
+      // Initialize terminal
+      terminal.current = new Terminal({
+        rows: 24,
+        cols: 80,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        fontSize: 14,
+        theme: {
+          background: '#000000',
+          foreground: '#33ff33',
+          cursor: '#33ff33'
+        },
+        cursorBlink: true,
+        allowTransparency: true,
       });
 
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        if (idleTimer.current) clearTimeout(idleTimer.current);
-        if (matrixRain.current) matrixRain.current.cleanup();
-        fitAddon.current?.dispose();
-        terminal.current?.dispose();
-      };
-    }
+      // Initialize fit addon
+      fitAddon.current = new FitAddon();
+      terminal.current.loadAddon(fitAddon.current);
+
+      if (terminalRef.current) {
+        // Open terminal
+        terminal.current.open(terminalRef.current);
+
+        // Set up resize handler
+        terminal.current.onResize(({ cols, rows }) => {
+          console.log('Terminal resized:', { cols, rows });
+          if (matrixRain.current && terminal.current) {
+            matrixRain.current.resize(cols, rows);
+          }
+        });
+
+        // Initial fit
+        try {
+          // Wait for a frame to ensure the DOM is ready
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          
+          fitAddon.current.fit();
+          console.log('Terminal fitted:', {
+            cols: terminal.current.cols,
+            rows: terminal.current.rows
+          });
+          
+          // Wait another frame to ensure dimensions are set
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          console.log('Terminal ready');
+          setIsTerminalReady(true);
+        } catch (error) {
+          console.error('Error fitting terminal:', error);
+        }
+
+        // Write welcome message and initial prompt
+        writeLines([
+          'Welcome to GRUX Terminal!',
+          'Type "help" for a list of available commands.',
+          ''
+        ]);
+
+        // Start idle detection
+        resetIdleTimer();
+
+        // Handle input
+        terminal.current.onData((data) => {
+          resetIdleTimer(); // Reset idle timer on *any* input
+
+          if (data === '\r') { // Enter pressed
+            terminal.current?.write('\r\n');
+            handleCommand(currentInput);
+            setCommandHistory(prev => [...prev, currentInput]);
+            setCurrentInput('');
+          } else if (data === '\x7f') { // Backspace
+            if (currentInput.length > 0) {
+              terminal.current?.write('\b \b');
+              setCurrentInput(prev => prev.slice(0, -1));
+            }
+          } else { // Regular input
+            terminal.current?.write(data);
+            setCurrentInput(prev => prev + data);
+          }
+        });
+      }
+    };
+
+    initializeTerminal().catch(console.error);
+
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      if (matrixRain.current) matrixRain.current.cleanup();
+      if (fitAddon.current) fitAddon.current.dispose();
+      if (terminal.current) terminal.current.dispose();
+    };
   }, []);
 
   return (
-    <div ref={terminalRef} style={{ 
-      height: '100%', 
-      width: '100%',
-      padding: '10px',
-      boxSizing: 'border-box',
-      backgroundColor: '#000'
-    }} />
+    <div style={containerStyle}>
+      <div ref={terminalRef} style={terminalStyle} />
+    </div>
   );
 };
 

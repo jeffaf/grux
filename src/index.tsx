@@ -4,8 +4,4 @@ import App from './App';
 import './index.css'; // Import global styles
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+root.render(<App />); // Removed StrictMode temporarily for debugging

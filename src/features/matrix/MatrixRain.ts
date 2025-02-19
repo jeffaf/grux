@@ -29,7 +29,7 @@ export class MatrixRain {
   private readonly SHOW_CURSOR = this.ESC + '[?25h';
 
   constructor(terminal: Terminal, config: Partial<MatrixConfig> = {}) {
-    console.log('Initializing MatrixRain with config:', config);
+    console.warn('[MatrixRain] Initializing with config:', config);
     this.terminal = terminal;
     this.config = { 
       ...DEFAULT_CONFIG, 
@@ -37,7 +37,7 @@ export class MatrixRain {
       rows: (terminal.rows || DEFAULT_CONFIG.rows) - this.reservedRows,
       ...config 
     };
-    console.log('Final config:', this.config);
+    console.warn('[MatrixRain] Final config:', this.config);
     this.raindrops = [];
     this.maxRaindrops = config.maxRaindrops || MAX_RAINDROPS;
   }
@@ -53,7 +53,7 @@ export class MatrixRain {
       return Math.pow(1 - t, 3);
     });
 
-    return {
+    const raindrop = {
       column,
       length,
       speed,
@@ -62,14 +62,15 @@ export class MatrixRain {
       active: true,
       brightnesses
     };
+    console.warn('[MatrixRain] Created new raindrop:', raindrop);
+    return raindrop;
   }
 
   private updateRaindrops(deltaTime: number): void {
     // Add new raindrops based on density
     if (this.raindrops.length < this.maxRaindrops && Math.random() < this.config.density * deltaTime) {
-      const raindrop = this.createRaindrop();
-      console.log('Created new raindrop:', raindrop);
-      this.raindrops.push(raindrop);
+      this.raindrops.push(this.createRaindrop());
+      console.warn('[MatrixRain] Added new raindrop, total:', this.raindrops.length);
     }
 
     // Update existing raindrops
@@ -80,7 +81,7 @@ export class MatrixRain {
 
       // Check if raindrop is still visible within the *available* rows
       if (drop.glowPosition - drop.length > this.config.rows) {
-        console.log('Removing raindrop at position:', drop.glowPosition);
+        console.warn('[MatrixRain] Removing raindrop at position:', drop.glowPosition);
         return false;
       }
 
@@ -154,7 +155,7 @@ export class MatrixRain {
 
   private animate(timestamp: number): void {
     if (!this.terminal || !this.isRunning) {
-      console.log('Animation stopped:', {
+      console.warn('[MatrixRain] Animation stopped:', {
         terminalExists: !!this.terminal,
         isRunning: this.isRunning
       });
@@ -164,7 +165,7 @@ export class MatrixRain {
     const deltaTime = (timestamp - this.lastFrameTime) / 1000; // Convert to seconds
     this.lastFrameTime = timestamp;
 
-    console.log('Animation frame:', {
+    console.warn('[MatrixRain] Animation frame:', {
       deltaTime,
       raindrops: this.raindrops.length,
       maxRaindrops: this.maxRaindrops
@@ -178,14 +179,14 @@ export class MatrixRain {
 
   public start(): void {
     if (!this.terminal || this.isRunning) {
-      console.log('Cannot start matrix rain:', {
+      console.warn('[MatrixRain] Cannot start:', {
         terminalExists: !!this.terminal,
         isRunning: this.isRunning
       });
       return;
     }
 
-    console.log('Starting matrix rain with dimensions:', {
+    console.warn('[MatrixRain] Starting with dimensions:', {
       columns: this.config.columns,
       rows: this.config.rows,
       maxRaindrops: this.maxRaindrops,
@@ -203,7 +204,7 @@ export class MatrixRain {
   }
 
   public stop(): void {
-    console.log('Stopping matrix rain');
+    console.warn('[MatrixRain] Stopping');
     if (!this.terminal) return;
     this.isRunning = false;
     if (this.animationFrameId) {
@@ -218,13 +219,13 @@ export class MatrixRain {
 
     if (!this.terminal) return;
     this.config = { ...this.config, ...newConfig };
-    console.log('Updated config:', this.config);
+    console.warn('[MatrixRain] Updated config:', this.config);
   }
 
   public resize(columns: number, rows: number): void {
     if (!this.terminal) return;
 
-    console.log('Resizing matrix rain:', {
+    console.warn('[MatrixRain] Resizing:', {
       columns,
       rows,
       reservedRows: this.reservedRows
@@ -236,7 +237,7 @@ export class MatrixRain {
   }
 
   public cleanup(): void {
-    console.log('Cleaning up matrix rain');
+    console.warn('[MatrixRain] Cleaning up');
     if (!this.terminal) return;
     this.stop();
     this.raindrops = [];

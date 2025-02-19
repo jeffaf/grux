@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { MatrixRain } from '../matrix';
@@ -38,8 +38,11 @@ const TerminalContainer: React.FC = () => {
   const lastActivityTime = useRef<number>(Date.now());
   const [isTerminalReady, setIsTerminalReady] = useState(false);
 
-  const writeLines = (lines: string[], addPrompt: boolean = true) => {
-    if (!terminal.current) return;
+  const writeLines = useCallback((lines: string[], addPrompt: boolean = true) => {
+    if (!terminal.current) {
+      console.warn('[Terminal] Cannot write lines - terminal not initialized');
+      return;
+    }
 
     lines.forEach(line => {
       terminal.current?.writeln(line);
@@ -48,10 +51,10 @@ const TerminalContainer: React.FC = () => {
     if (addPrompt) {
       terminal.current.write('grux> ');
     }
-  };
+  }, []);
 
   // Reset idle timer on activity
-  const resetIdleTimer = () => {
+  const resetIdleTimer = useCallback(() => {
     if (idleTimer.current) {
       clearTimeout(idleTimer.current);
     }
@@ -61,11 +64,11 @@ const TerminalContainer: React.FC = () => {
         startMatrixRain();
       }
     }, IDLE_TIMEOUT);
-  };
+  }, []);
 
   // Matrix rain effect
-  const startMatrixRain = () => {
-    console.log('Attempting to start matrix rain:', {
+  const startMatrixRain = useCallback(() => {
+    console.warn('[Terminal] Attempting to start matrix rain:', {
       terminalExists: !!terminal.current,
       isRunning: matrixRain.current?.isRunning,
       isReady: isTerminalReady,
@@ -74,13 +77,13 @@ const TerminalContainer: React.FC = () => {
     });
 
     if (!terminal.current || matrixRain.current?.isRunning || !isTerminalReady) {
-      console.log('Cannot start matrix rain - conditions not met');
+      console.warn('[Terminal] Cannot start matrix rain - conditions not met');
       return;
     }
 
     try {
       // Initialize MatrixRain with current terminal dimensions
-      console.log('Creating new MatrixRain instance');
+      console.warn('[Terminal] Creating new MatrixRain instance');
       matrixRain.current = new MatrixRain(terminal.current, {
         columns: terminal.current.cols,
         rows: terminal.current.rows,
@@ -89,16 +92,16 @@ const TerminalContainer: React.FC = () => {
       // Set up terminal: hide cursor
       terminal.current.options.cursorBlink = false;
 
-      console.log('Starting matrix rain animation');
+      console.warn('[Terminal] Starting matrix rain animation');
       matrixRain.current.start();
     } catch (error) {
-      console.error('Error starting matrix rain:', error);
+      console.error('[Terminal] Error starting matrix rain:', error);
     }
-  };
+  }, [isTerminalReady]);
 
   // Stop matrix rain
-  const stopMatrixRain = () => {
-    console.log('Stopping matrix rain');
+  const stopMatrixRain = useCallback(() => {
+    console.warn('[Terminal] Stopping matrix rain');
     if (matrixRain.current) {
       matrixRain.current.stop();
       matrixRain.current.cleanup();
@@ -110,16 +113,25 @@ const TerminalContainer: React.FC = () => {
       writeLines(['Matrix rain stopped']); // Includes prompt
     }
     resetIdleTimer();
-  };
+  }, [writeLines, resetIdleTimer]);
 
-  const handleCommand = (command: string) => {
-    if (!terminal.current) return;
+  const handleCommand = useCallback((command: string) => {
+    console.warn('[Terminal] Processing command:', { command });
+    
+    if (!terminal.current) {
+      console.warn('[Terminal] Cannot handle command - terminal not initialized');
+      return;
+    }
 
-    const args = command.trim().split(/\s+/);
+    // Clean up command by removing special characters and trimming
+    const cleanCommand = command.replace(/[\r\n\\]/g, '').trim();
+    console.warn('[Terminal] Cleaned command:', { cleanCommand });
+
+    const args = cleanCommand.split(/\s+/);
     const commandName = args[0].toLowerCase();
     let prompt = true;
 
-    console.log('Handling command:', commandName, args);
+    console.warn('[Terminal] Handling command:', { commandName, args });
 
     switch (commandName) {
       case 'help':
@@ -181,7 +193,7 @@ const TerminalContainer: React.FC = () => {
             writeLines(['Invalid density value. Use a number between 0.1 and 1.0']);
           }
         } else {
-          console.log('Starting matrix rain from command');
+          console.warn('[Terminal] Starting matrix rain from command');
           startMatrixRain();
           prompt = false;
         }
@@ -197,18 +209,18 @@ const TerminalContainer: React.FC = () => {
         break;
 
       default:
-        if (command.trim()) {
+        if (cleanCommand) {
           writeLines([`Command not found: ${commandName}`]);
         }
     }
     if (prompt) {
       terminal.current.write('grux> ');
     }
-  };
+  }, [writeLines, startMatrixRain, stopMatrixRain]);
 
   useEffect(() => {
     const initializeTerminal = async () => {
-      console.log('Initializing terminal');
+      console.warn('[Terminal] Initializing terminal');
       // Initialize terminal
       terminal.current = new Terminal({
         rows: 24,
@@ -222,6 +234,7 @@ const TerminalContainer: React.FC = () => {
         },
         cursorBlink: true,
         allowTransparency: true,
+        convertEol: true, // Convert line endings
       });
 
       // Initialize fit addon
@@ -234,7 +247,7 @@ const TerminalContainer: React.FC = () => {
 
         // Set up resize handler
         terminal.current.onResize(({ cols, rows }) => {
-          console.log('Terminal resized:', { cols, rows });
+          console.warn('[Terminal] Resized:', { cols, rows });
           if (matrixRain.current && terminal.current) {
             matrixRain.current.resize(cols, rows);
           }
@@ -246,17 +259,17 @@ const TerminalContainer: React.FC = () => {
           await new Promise(resolve => requestAnimationFrame(resolve));
           
           fitAddon.current.fit();
-          console.log('Terminal fitted:', {
+          console.warn('[Terminal] Fitted:', {
             cols: terminal.current.cols,
             rows: terminal.current.rows
           });
           
           // Wait another frame to ensure dimensions are set
           await new Promise(resolve => requestAnimationFrame(resolve));
-          console.log('Terminal ready');
+          console.warn('[Terminal] Ready');
           setIsTerminalReady(true);
         } catch (error) {
-          console.error('Error fitting terminal:', error);
+          console.error('[Terminal] Error fitting terminal:', error);
         }
 
         // Write welcome message and initial prompt
@@ -269,24 +282,48 @@ const TerminalContainer: React.FC = () => {
         // Start idle detection
         resetIdleTimer();
 
-        // Handle input
+        // Handle input using onData
         terminal.current.onData((data) => {
-          resetIdleTimer(); // Reset idle timer on *any* input
+          console.warn('[Terminal] Received data:', { 
+            data,
+            charCodes: data.split('').map(c => c.charCodeAt(0)),
+            currentInput
+          });
+
+          resetIdleTimer();
 
           if (data === '\r') { // Enter pressed
+            console.warn('[Terminal] Enter pressed, current input:', currentInput);
             terminal.current?.write('\r\n');
             handleCommand(currentInput);
             setCommandHistory(prev => [...prev, currentInput]);
-            setCurrentInput('');
+            setCurrentInput(''); // Clear input after handling command
           } else if (data === '\x7f') { // Backspace
             if (currentInput.length > 0) {
               terminal.current?.write('\b \b');
-              setCurrentInput(prev => prev.slice(0, -1));
+              setCurrentInput(prev => {
+                const newInput = prev.slice(0, -1);
+                console.warn('[Terminal] Backspace, new input:', newInput);
+                return newInput;
+              });
             }
           } else { // Regular input
-            terminal.current?.write(data);
-            setCurrentInput(prev => prev + data);
+            // Filter out special characters
+            if (!/[\r\n\\]/.test(data)) {
+              terminal.current?.write(data);
+              setCurrentInput(prev => {
+                const newInput = prev + data;
+                console.warn('[Terminal] Updated input:', newInput);
+                return newInput;
+              });
+            }
           }
+        });
+
+        // Focus terminal on click
+        terminalRef.current.addEventListener('click', () => {
+          console.warn('[Terminal] Clicked, focusing terminal');
+          terminal.current?.focus();
         });
       }
     };
@@ -298,8 +335,11 @@ const TerminalContainer: React.FC = () => {
       if (matrixRain.current) matrixRain.current.cleanup();
       if (fitAddon.current) fitAddon.current.dispose();
       if (terminal.current) terminal.current.dispose();
+      if (terminalRef.current) {
+        terminalRef.current.removeEventListener('click', () => {});
+      }
     };
-  }, []);
+  }, [writeLines, handleCommand, resetIdleTimer]);
 
   return (
     <div style={containerStyle}>

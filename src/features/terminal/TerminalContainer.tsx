@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Terminal, IDisposable } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { MatrixRain } from '../matrix';
+import { VirtualLinuxEnvironment } from '../backdoor/VirtualLinuxEnvironment';
 import 'xterm/css/xterm.css';
 
 const IDLE_TIMEOUT = 30000;
@@ -116,18 +117,40 @@ const TerminalContainer: React.FC = () => {
   const matrixRain = useRef<MatrixRain | null>(null);
   const lineReader = useRef<TerminalLineReader | null>(null);
   const mouseMoveHandler = useRef<(() => void) | null>(null);
-
+  const virtualEnv = useRef<VirtualLinuxEnvironment | null>(null);
+  
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActivityTime = useRef<number>(Date.now());
   const [isTerminalReady, setIsTerminalReady] = useState(false);
+  const [isBackdoorMode, setIsBackdoorMode] = useState(false);
+
+  const enterBackdoorMode = useCallback(() => {
+    if (!terminal.current) return;
+    virtualEnv.current = new VirtualLinuxEnvironment();
+    setIsBackdoorMode(true);
+    terminal.current.clear();
+    writeLines([
+      "ACCESS GRANTED",
+      "Welcome to the Matrix Defense System",
+      "Initializing secure shell...",
+      "Connecting to mainframe...",
+      "Connected.",
+      ""
+    ], false);
+    terminal.current.write(virtualEnv.current.getPrompt());
+  }, []);
 
   const writeLines = useCallback((lines: string[], addPrompt: boolean = true) => {
     if (!terminal.current) return;
     lines.forEach(line => terminal.current!.writeln(line));
     if (addPrompt) {
-      terminal.current!.write("grux> ");
+      if (isBackdoorMode && virtualEnv.current) {
+        terminal.current.write(virtualEnv.current.getPrompt());
+      } else {
+        terminal.current.write("grux> ");
+      }
     }
-  }, []);
+  }, [isBackdoorMode]);
 
   const resetIdleTimer = useCallback(() => {
     if (idleTimer.current) clearTimeout(idleTimer.current);
@@ -184,14 +207,32 @@ const TerminalContainer: React.FC = () => {
     if (!terminal.current) return;
 
     console.log("[Terminal] Execute command:", input);
-    // Process the input command.
     const cmd = input.trim();
     if (!cmd) {
-      terminal.current!.write("grux> ");
+      if (isBackdoorMode && virtualEnv.current) {
+        terminal.current.write(virtualEnv.current.getPrompt());
+      } else {
+        terminal.current.write("grux> ");
+      }
       return;
     }
+
     const [command, ...args] = cmd.split(/\s+/);
     console.log("[Terminal] Command:", { command, args });
+    
+    // Handle backdoor mode differently
+    if (isBackdoorMode && virtualEnv.current) {
+      const result = virtualEnv.current.execCommand(cmd);
+      writeLines(result.output, true);
+      return;
+    }
+
+    // Special hidden command to enter backdoor mode
+    if (command.toLowerCase() === 'backdoor') {
+      enterBackdoorMode();
+      return;
+    }
+
     let showPrompt = true;
     switch (command.toLowerCase()) {
       case "help":
@@ -229,7 +270,7 @@ const TerminalContainer: React.FC = () => {
         } else {
           const filename = args[0];
           // Check if this is a passwd file attempt
-          if (passwdAliases.includes(filename) ||
+          if (passwdAliases.includes(filename) || 
               filename.toLowerCase().includes('passwd')) {
             const content = virtualFiles["/etc/passwd"].split('\n');
             writeLines(content, false);
@@ -281,6 +322,10 @@ const TerminalContainer: React.FC = () => {
         break;
       case "exit":
         terminal.current!.clear();
+        if (isBackdoorMode) {
+          setIsBackdoorMode(false);
+          virtualEnv.current = null;
+        }
         writeLines(["Terminal reset."], false);
         break;
       default:
@@ -289,9 +334,13 @@ const TerminalContainer: React.FC = () => {
         }
     }
     if (showPrompt) {
-      terminal.current!.write("grux> ");
+      if (isBackdoorMode && virtualEnv.current) {
+        terminal.current.write(virtualEnv.current.getPrompt());
+      } else {
+        terminal.current.write("grux> ");
+      }
     }
-  }, [writeLines, startMatrixRain, stopMatrixRain]);
+  }, [writeLines, startMatrixRain, stopMatrixRain, isBackdoorMode, enterBackdoorMode]);
 
   useEffect(() => {
     const initializeTerminal = async () => {
@@ -334,6 +383,7 @@ const TerminalContainer: React.FC = () => {
           }
         };
         terminalRef.current.addEventListener("mousemove", mouseMoveHandler.current);
+        
         try {
           await new Promise(resolve => requestAnimationFrame(resolve));
           fitAddon.current!.fit();

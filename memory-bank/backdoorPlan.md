@@ -30,6 +30,8 @@ Create a fake Ubuntu environment that users can explore when they discover the h
 - Environment variables (PATH, HOME, USER, etc.)
 - Command history
 - Previous command output for pipelines
+- Tab completion state
+- Color output settings
 
 ### 3. Core Commands
 ```
@@ -52,6 +54,11 @@ System Info:
 - ps: List processes
 - hostname: Show system name
 - echo: Display text/variables
+
+New Hackable Commands:
+- hack: Execute system penetration (with color output)
+- scan: Network scanning simulation
+- decrypt: Password cracking simulation
 ```
 
 ### 4. Environment Details
@@ -62,7 +69,77 @@ Shell: /bin/bash
 Default Path: /home/hacker
 ```
 
-### 5. Interesting Content
+### 5. Enhanced Features
+
+#### Tab Completion
+- Command completion
+- File/directory path completion
+- Command option completion
+- Custom completion for special commands (hack, scan, decrypt)
+
+Implementation:
+```typescript
+interface CompletionProvider {
+  getCompletions(input: string): string[];
+  getPriority(): number;
+}
+
+class CommandCompletionProvider implements CompletionProvider {
+  getCompletions(input: string): string[] {
+    // Return matching commands
+  }
+}
+
+class PathCompletionProvider implements CompletionProvider {
+  getCompletions(input: string): string[] {
+    // Return matching paths
+  }
+}
+```
+
+#### Color Output System
+Using xterm.js parser hooks for enhanced color rendering:
+```typescript
+// Color sequence handler
+const colorHandler = terminal.parser.registerCsiHandler(
+  {final: 'm'},
+  (params) => {
+    // Handle custom color sequences
+    return false; // Allow default handler
+  }
+);
+
+// Example color sequences
+const colors = {
+  error: '\x1b[31m', // Red
+  success: '\x1b[32m', // Green
+  info: '\x1b[36m',  // Cyan
+  reset: '\x1b[0m'
+};
+```
+
+#### Custom Parser Hooks
+```typescript
+// Progress indicator sequence
+const progressHandler = terminal.parser.registerDcsHandler(
+  {prefix: 'P', final: 'p'},
+  (params, data) => {
+    // Handle progress updates
+    return true;
+  }
+);
+
+// System status sequence
+const statusHandler = terminal.parser.registerOscHandler(
+  1337, // Custom status code
+  (data) => {
+    // Update system status
+    return true;
+  }
+);
+```
+
+### 6. Interesting Content
 
 Hidden Files:
 - /etc/shadow (with encrypted passwords)
@@ -75,15 +152,19 @@ Easter Eggs:
 - References to The Matrix
 - Fake vulnerability hints
 - Secret directories
+- Color-coded access levels
+- Progress bars in hack attempts
 
 ## Implementation Steps
 
-1. Create VirtualLinuxEnvironment class:
+1. Create VirtualLinuxEnvironment class with enhanced features:
 ```typescript
 class VirtualLinuxEnvironment {
   private cwd: string;
   private env: Record<string, string>;
   private fs: VirtualFilesystem;
+  private completionManager: CompletionManager;
+  private colorManager: ColorManager;
   
   constructor() {
     this.cwd = '/home/hacker';
@@ -92,58 +173,43 @@ class VirtualLinuxEnvironment {
       USER: 'hacker',
       SHELL: '/bin/bash',
       PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-      PS1: '\\u@\\h:\\w\\$ '
+      PS1: '\\u@\\h:\\w\\$ ',
+      TERM: 'xterm-256color'
     };
   }
   
-  // Command handlers
-  execCommand(cmd: string, args: string[]): string;
+  // Enhanced command handling
+  execCommand(cmd: string, args: string[]): CommandResult;
   
-  // Path resolution
+  // Tab completion
+  getCompletions(input: string): string[];
+  
+  // Path resolution with cache
   resolvePath(path: string): string;
   
   // Environment management
   getEnv(key: string): string;
   setEnv(key: string, value: string): void;
+  
+  // Color output helpers
+  formatOutput(text: string, type: 'error' | 'success' | 'info'): string;
 }
 ```
 
-2. Implement virtual filesystem with proper path handling
-
-3. Add command processors:
-```typescript
-interface CommandProcessor {
-  execute(args: string[]): string;
-}
-
-class LsCommand implements CommandProcessor {
-  execute(args: string[]): string;
-}
-
-class CdCommand implements CommandProcessor {
-  execute(args: string[]): string;
-}
-
-// etc.
-```
-
-4. Add backdoor mode to TerminalContainer:
-```typescript
-const enterBackdoorMode = () => {
-  const env = new VirtualLinuxEnvironment();
-  writeLines(["Access granted. Welcome to the Matrix Defense System."]);
-  // Change prompt and command handling
-};
-```
-
-5. Create interesting content and easter eggs
+2. Implement enhanced virtual filesystem with completion support
+3. Add command processors with color output
+4. Implement tab completion system
+5. Set up parser hooks for special sequences
+6. Create interesting content and easter eggs
+7. Add visual improvements for hack commands
 
 ## Timeline
 1. Basic filesystem and navigation (2 hours)
 2. Core command implementation (3 hours)
-3. State management (2 hours)
-4. Content creation (2 hours)
-5. Testing and polish (1 hour)
+3. Tab completion system (2 hours)
+4. Color output and parser hooks (2 hours)
+5. Content creation (2 hours)
+6. Testing and polish (2 hours)
 
 ## Future Enhancements
 - Command piping (e.g., ls | grep)
@@ -151,3 +217,7 @@ const enterBackdoorMode = () => {
 - File permissions system
 - Process simulation
 - Network command simulation
+- Real-time system monitoring
+- Multiple terminal sessions
+- Custom completion providers
+- Command suggestions based on history

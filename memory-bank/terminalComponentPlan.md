@@ -1,91 +1,143 @@
-# TerminalContainer Component Implementation Plan
+# Terminal Component Enhancement Plan
 
-This file details the implementation plan for the `TerminalContainer` React component, which is the core of the GRUX terminal interface.
+## Current Implementation Status
+- Uses xterm.js as terminal emulator
+- Integrated with virtual Linux environment
+- Supports basic command execution
+- Directory tracking in place but needs better feedback
 
-## Component: `TerminalContainer` (`/src/features/terminal/TerminalContainer.tsx`)
+## Planned Improvements
 
-### Purpose:
-- Main container component for the terminal.
-- Initializes and manages the `xterm.js` instance.
-- Handles terminal input and output.
-- Integrates with other features (feeds, animations).
+### 1. Directory Tracking Enhancement
+- **Current State**:
+  - VirtualLinuxEnvironment tracks cwd correctly
+  - Prompt shows current directory
+  - Path resolution working properly
+- **Improvements Needed**:
+  - Add visual feedback for directory changes
+  - Ensure prompt updates immediately after cd command
+  - Consider adding directory status to terminal title
+  - Implement PWD caching for performance
 
-### Implementation Steps:
+### 2. Tab Completion Implementation
+- **Integration Point**: TerminalLineReader class
+- **Implementation Strategy**:
+  - Add TAB key (0x09) handling in handleData method
+  - Integrate with VirtualFilesystem for path completion
+  - Use xterm.js parser hooks for custom completion behavior
+  - Support command and filename completion in backdoor mode
+  - Prioritize directory completion for cd command
+- **Technical Details**:
+  ```typescript
+  // Example structure for completion handler
+  private handleTabCompletion = () => {
+    const currentInput = this.buffer;
+    const suggestions = this.virtualEnv.getSuggestions(currentInput);
+    // Display suggestions or auto-complete if single match
+  }
+  ```
 
-1. **Setup `xterm.js` Instance:**
-   - Import `Terminal` from `xterm`.
-   - In `TerminalContainer` component, create a ref to hold the terminal instance.
-   - In `useEffect`, initialize a new `Terminal()` instance and attach it to a div element ref.
-   - Ensure proper disposal of the terminal instance on component unmount.
-
-2. **Basic Input Handling:**
-   - Use `terminal.onData(data => { ... })` to capture user input.
-   - For now, simply echo the input back to the terminal using `terminal.write(data)`.
-   - Later, this will be expanded to handle commands.
-
-3. **Basic Output Handling:**
-   - Create a function `writeToTerminal(text: string)` within `TerminalContainer`.
-   - This function will use `terminal.write(text)` to display text in the terminal.
-   - This will be used by other features to display output in the terminal.
-
-4. **Component Props and State:**
-   - Define initial props (if any) for `TerminalContainer`. For now, we can start without specific props.
-   - Define component state (if needed). Initially, we might not need state in `TerminalContainer` itself, but child components might have state.
-
-5. **Styling:**
-   - Apply basic styling to the terminal container to achieve the green phosphor on black look.
-   - Use CSS to set background color, text color, font family, and potentially add the scanline effect later.
-
-6. **Integration Points:**
-   - Identify points where other features (Matrix rain, feeds) will integrate with `TerminalContainer`.
-   - For example, the Matrix rain animation will need to access the `xterm.js` instance to write characters.
-   - The FeedDisplay component will need to use `writeToTerminal` to display feed data.
-
-### Initial Code Structure (`/src/features/terminal/TerminalContainer.tsx`):**
-
-```typescript jsx
-import React, { useRef, useEffect } from 'react';
-import { Terminal } from 'xterm';
-import 'xterm/css/xterm.css'; // Import default styles
-
-const TerminalContainer: React.FC = () => {
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const terminal = useRef<Terminal | null>(null);
-
-  useEffect(() => {
-    terminal.current = new Terminal({
-      theme: {
-        background: '#000000',
-        foreground: '#33ff33',
-      },
-    });
-
-    terminal.current.open(terminalRef.current!);
-
-    terminal.current.onData(data => {
-      terminal.current?.write(data); // Echo input for now
-    });
-
-    return () => {
-      terminal.current?.dispose();
-      terminal.current = null;
-    };
-  }, []);
-
-  const writeToTerminal = (text: string) => {
-    terminal.current?.write(text);
-  };
-
-  return (
-    <div ref={terminalRef} />
+### 3. Color Rendering Enhancement
+- **Current Issue**: Hack command color output not rendering properly
+- **Solution Approach**:
+  - Implement custom CSI sequences for color output
+  - Register custom parser hooks for color handling
+  - Add support for 256 color mode
+  - Ensure color state resets properly
+- **Technical Details**:
+  ```typescript
+  // Custom color sequence handler
+  const colorHandler = terminal.parser.registerCsiHandler(
+    {final: 'm'},
+    (params) => {
+      // Handle color parameters
+      return false; // Allow default handler to run
+    }
   );
-};
+  ```
 
-export default TerminalContainer;
-```
+### 4. Parser Hooks Integration
+- **Purpose**: Extend terminal functionality with custom sequences
+- **Implementation Areas**:
+  1. Color Rendering:
+     - Custom CSI sequences for advanced color control
+     - Support for nested color codes
+  2. Tab Completion:
+     - Custom DCS sequence for completion requests
+     - Payload format for completion data
+  3. Directory Status:
+     - Custom sequences for directory updates
+     - Prompt refresh handling
+  4. Command Processing:
+     - Custom sequences for command status
+     - Progress indicators
+     - Timing information
 
----
+### 5. Virtual Environment Integration
+- **Current**: Basic command execution with directory tracking
+- **Enhancements**:
+  - Immediate prompt updates after directory changes
+  - Better error handling with visual feedback
+  - Progress indicators for long-running commands
+  - Enhanced path completion with directory priorities
 
-This plan provides a starting point for implementing the `TerminalContainer` component. We can refine it further as we progress.
+## Implementation Steps
 
-What do you think of this plan? Would you like to make any adjustments before I proceed to update the Memory Bank files?
+1. **Directory Tracking Enhancement**:
+   - Verify prompt update mechanism
+   - Add directory change visual feedback
+   - Implement PWD caching
+   - Add terminal title updates
+
+2. **Tab Completion System**:
+   - Extend TerminalLineReader
+   - Implement completion logic
+   - Add completion UI rendering
+   - Prioritize directory completion
+
+3. **Color Enhancement**:
+   - Implement color parser hooks
+   - Update hack command output
+   - Add color utilities
+   - Test color state management
+
+4. **Parser Hooks Setup**:
+   - Register necessary hooks
+   - Implement handlers
+   - Add error handling
+   - Test integration points
+
+## Technical Considerations
+
+1. **Performance**:
+   - Cache directory information
+   - Optimize path resolution
+   - Minimize prompt updates
+   - Handle large directories efficiently
+
+2. **Compatibility**:
+   - Maintain consistent behavior
+   - Handle edge cases in paths
+   - Support different terminal sizes
+   - Preserve existing functionality
+
+3. **Error Handling**:
+   - Clear error messages
+   - Visual feedback for issues
+   - Recovery mechanisms
+   - State consistency
+
+## Next Steps
+
+1. Implement directory tracking improvements
+2. Add tab completion base functionality
+3. Fix color parsing
+4. Set up parser hooks
+5. Update documentation
+6. Add comprehensive tests
+
+## Notes
+- Directory tracking is functional but needs better feedback
+- Color handling requires immediate attention
+- Tab completion should prioritize common use cases
+- Parser hooks will enable future extensibility

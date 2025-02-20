@@ -3,6 +3,7 @@ import { Terminal, IDisposable } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { MatrixRain } from '../matrix';
 import { VirtualLinuxEnvironment } from '../backdoor/VirtualLinuxEnvironment';
+import { SGR } from './colors';
 import 'xterm/css/xterm.css';
 
 const IDLE_TIMEOUT = 30000;
@@ -12,25 +13,35 @@ class TerminalLineReader {
   buffer: string;
   onLine: (line: string) => void;
   private _dataSubscription: IDisposable | null;
+  private _sgrHandler: IDisposable | null;
 
   constructor(terminal: Terminal, onLine: (line: string) => void) {
     this.terminal = terminal;
     this.buffer = "";
     this.onLine = onLine;
     this._dataSubscription = this.terminal.onData(this.handleData);
+
+    // Add SGR sequence handler
+    this._sgrHandler = this.terminal.parser.registerCsiHandler(
+      { final: 'm' },
+      (params) => {
+        // Let default handler process color sequences
+        return false;
+      }
+    );
   }
 
   private handleData = (data: string) => {
     const charCode = data.charCodeAt(0);
     
-    // Debug logging
     console.log('[LineReader] Received:', {
       data,
       charCode,
+      hex: charCode.toString(16),
       buffer: this.buffer
     });
 
-    // Handle Enter
+    // Handle Enter key
     if (data === "\r" || data === "\n") {
       this.terminal.write("\r\n");
       this.onLine(this.buffer);
@@ -38,13 +49,27 @@ class TerminalLineReader {
       return;
     }
 
-    // Handle backspace/delete (various codes that different systems might send)
-    if (charCode === 127 || charCode === 8 || data === "\b" || data === "" || data === "") {
+    // Handle backspace/delete
+    if (charCode === 127 || charCode === 8 || data === "\b") {
       if (this.buffer.length > 0) {
-        this.terminal.write("\b \b"); // move back, clear character, move back again
+        this.terminal.write("\b \b");
         this.buffer = this.buffer.slice(0, -1);
         console.log('[LineReader] After backspace:', this.buffer);
       }
+      return;
+    }
+
+    // Handle TAB key
+    if (charCode === 9) {
+      // TODO: Implement tab completion
+      return;
+    }
+
+    // Handle Ctrl+C
+    if (charCode === 3) {
+      this.terminal.write("^C\r\n");
+      this.buffer = "";
+      this.terminal.write("grux> ");
       return;
     }
 
@@ -56,8 +81,14 @@ class TerminalLineReader {
   };
 
   dispose() {
-    this._dataSubscription?.dispose();
-    this._dataSubscription = null;
+    if (this._dataSubscription) {
+      this._dataSubscription.dispose();
+      this._dataSubscription = null;
+    }
+    if (this._sgrHandler) {
+      this._sgrHandler.dispose();
+      this._sgrHandler = null;
+    }
   }
 }
 
@@ -75,29 +106,6 @@ const TerminalContainer: React.FC = () => {
   const [isTerminalReady, setIsTerminalReady] = useState(false);
   const [isBackdoorMode, setIsBackdoorMode] = useState(false);
 
-  const enterBackdoorMode = useCallback(() => {
-    if (!terminal.current) return;
-    
-    // Set focus first
-    terminal.current.focus();
-    
-    virtualEnv.current = new VirtualLinuxEnvironment();
-    setIsBackdoorMode(true);
-    terminal.current.clear();
-    writeLines([
-      "ACCESS GRANTED",
-      "Welcome to the Matrix Defense System",
-      "Initializing secure shell...",
-      "Connecting to mainframe...",
-      "Connected.",
-      "",
-      "Type 'help' for available commands.",
-      "TIP: Check out the installation guide at ~/docs/INSTALL.md",
-      ""
-    ], false);
-    terminal.current.write(virtualEnv.current.getPrompt());
-  }, []);
-
   const writeLines = useCallback((lines: string[], addPrompt: boolean = true) => {
     if (!terminal.current) return;
     lines.forEach(line => terminal.current!.writeln(line));
@@ -105,7 +113,7 @@ const TerminalContainer: React.FC = () => {
       if (isBackdoorMode && virtualEnv.current) {
         terminal.current.write(virtualEnv.current.getPrompt());
       } else {
-        terminal.current.write("grux> ");
+        terminal.current.write(SGR.green + "grux> " + SGR.reset);
       }
     }
   }, [isBackdoorMode]);
@@ -121,16 +129,7 @@ const TerminalContainer: React.FC = () => {
   }, []);
 
   const startMatrixRain = useCallback(() => {
-    console.log("[Matrix] Starting", {
-      terminal: !!terminal.current,
-      isReady: isTerminalReady,
-      isRunning: matrixRain.current?.isRunning,
-    });
-
-    if (!terminal.current || matrixRain.current?.isRunning || !isTerminalReady) {
-      console.log("[Matrix] Cannot start - conditions not met");
-      return;
-    }
+    if (!terminal.current || matrixRain.current?.isRunning || !isTerminalReady) return;
 
     try {
       matrixRain.current = new MatrixRain(terminal.current!, {
@@ -139,7 +138,6 @@ const TerminalContainer: React.FC = () => {
       });
       terminal.current!.options.cursorBlink = false;
       matrixRain.current.start();
-      console.log("[Matrix] Started");
     } catch (error) {
       console.error("[Matrix] Error:", error);
     }
@@ -148,30 +146,60 @@ const TerminalContainer: React.FC = () => {
   const stopMatrixRain = useCallback(() => {
     if (!matrixRain.current) return;
 
-    console.log("[Matrix] Stopping");
     matrixRain.current.stop();
     matrixRain.current.cleanup();
     matrixRain.current = null;
 
     if (terminal.current) {
-      terminal.current!.options.cursorBlink = true;
-      terminal.current!.clear();
-      writeLines(["Matrix rain stopped"]);
+      terminal.current.options.cursorBlink = true;
+      terminal.current.clear();
+      writeLines([SGR.green + "Matrix rain stopped" + SGR.reset]);
     }
     resetIdleTimer();
   }, [writeLines, resetIdleTimer]);
 
+  const enterBackdoorMode = useCallback(() => {
+    if (!terminal.current) return;
+
+    const initializeBackdoor = () => {
+      virtualEnv.current = new VirtualLinuxEnvironment();
+      setIsBackdoorMode(true);
+      terminal.current!.clear();
+      
+      writeLines([
+        SGR.brightGreen + "ACCESS GRANTED" + SGR.reset,
+        SGR.green + "Welcome to the Matrix Defense System" + SGR.reset,
+        SGR.dim + "Initializing secure shell..." + SGR.reset,
+        SGR.dim + "Connecting to mainframe..." + SGR.reset,
+        SGR.brightGreen + "Connected." + SGR.reset,
+        "",
+        "Type 'help' for available commands.",
+        SGR.dim + "TIP: Check out the installation guide at ~/docs/INSTALL.md" + SGR.reset,
+        ""
+      ], false);
+
+      terminal.current!.write(virtualEnv.current.getPrompt());
+      terminal.current!.focus();
+    };
+
+    // Use RAF to ensure DOM is updated
+    requestAnimationFrame(() => {
+      terminal.current?.focus();
+      requestAnimationFrame(initializeBackdoor);
+    });
+  }, [writeLines]);
+
   const executeCommand = useCallback((input: string) => {
     if (!terminal.current) return;
 
-    console.log("[Terminal] Execute command:", input);
     const cmd = input.trim();
     if (!cmd) {
       if (isBackdoorMode && virtualEnv.current) {
         terminal.current.write(virtualEnv.current.getPrompt());
       } else {
-        terminal.current.write("grux> ");
+        terminal.current.write(SGR.green + "grux> " + SGR.reset);
       }
+      terminal.current.focus();
       return;
     }
 
@@ -181,15 +209,13 @@ const TerminalContainer: React.FC = () => {
         setIsBackdoorMode(false);
         virtualEnv.current = null;
         terminal.current.clear();
-        writeLines(['Returned to GRUX Terminal.']);
+        writeLines([SGR.green + 'Returned to GRUX Terminal.' + SGR.reset], true);
         terminal.current.focus();
       } else if (result.delayedOutput) {
-        // Handle delayed output with typing effect
         (async () => {
           for (const line of result.output) {
             if (line.includes('INITIATING') || line.includes('ACCESSING') || 
                 line.includes('BYPASSING') || line.includes('COMPROMISED')) {
-              // Type each character of the status messages
               for (let i = 0; i < line.length; i++) {
                 terminal.current?.write(line[i]);
                 await new Promise(resolve => setTimeout(resolve, 50));
@@ -197,7 +223,6 @@ const TerminalContainer: React.FC = () => {
               terminal.current?.write('\r\n');
               await new Promise(resolve => setTimeout(resolve, 500));
             } else {
-              // Print ASCII art lines instantly
               terminal.current?.writeln(line);
             }
           }
@@ -206,11 +231,11 @@ const TerminalContainer: React.FC = () => {
         })();
       } else {
         writeLines(result.output, true);
+        terminal.current.focus();
       }
       return;
     }
 
-    // Special hidden command to enter backdoor mode
     if (cmd.toLowerCase() === 'backdoor') {
       enterBackdoorMode();
       return;
@@ -219,57 +244,57 @@ const TerminalContainer: React.FC = () => {
     let showPrompt = true;
     switch (cmd.toLowerCase()) {
       case "help":
-        writeLines(
-          [
-            "Available commands:",
-            "  help              - Show this help message",
-            "  ls, dir          - List files in current directory",
-            "  cat [file]       - Display contents of a file",
-            "  clear            - Clear the terminal screen",
-            "  echo [text]      - Display text in terminal",
-            "  version          - Show terminal version",
-            "  matrix           - Start Matrix rain animation",
-            "  matrix speed     - Set matrix animation speed (0.1-2.0)",
-            "  matrix density   - Set raindrop density (0.1-1.0)",
-            "  stop             - Stop Matrix rain animation",
-            "  exit             - Clear screen and reset terminal",
-          ],
-          false
-        );
+        writeLines([
+          SGR.brightGreen + "Available commands:" + SGR.reset,
+          "  help              - Show this help message",
+          "  ls, dir          - List files in current directory",
+          "  cat [file]       - Display contents of a file",
+          "  clear            - Clear the terminal screen",
+          "  echo [text]      - Display text in terminal",
+          "  version          - Show terminal version",
+          "  matrix           - Start Matrix rain animation",
+          "  matrix speed     - Set matrix animation speed (0.1-2.0)",
+          "  matrix density   - Set raindrop density (0.1-1.0)",
+          "  stop             - Stop Matrix rain animation",
+          "  exit             - Clear screen and reset terminal",
+        ], false);
         break;
       case "ls":
       case "dir":
-        writeLines(
-          ["Documents/", "Downloads/", "Projects/", "README.md", "config.json"],
-          false
-        );
+        writeLines([
+          SGR.brightBlue + "Documents/" + SGR.reset,
+          SGR.brightBlue + "Downloads/" + SGR.reset,
+          SGR.brightBlue + "Projects/" + SGR.reset,
+          "README.md",
+          "config.json"
+        ], false);
         break;
       case "clear":
-        terminal.current!.clear();
+        terminal.current.clear();
         break;
       case "echo":
         const args = cmd.split(/\s+/).slice(1);
         writeLines([args.join(" ")], false);
         break;
       case "version":
-        writeLines(["GRUX Terminal v1.0.0"], false);
+        writeLines([SGR.brightGreen + "GRUX Terminal v1.0.0" + SGR.reset], false);
         break;
       case "matrix":
         if (cmd.includes("speed")) {
           const speed = parseFloat(cmd.split(/\s+/)[2]);
           if (!isNaN(speed) && speed >= 0.1 && speed <= 2.0 && matrixRain.current) {
             matrixRain.current.updateConfig({ animationSpeed: speed });
-            writeLines([`Matrix speed set to ${speed}`]);
+            writeLines([SGR.green + `Matrix speed set to ${speed}` + SGR.reset]);
           } else {
-            writeLines(["Invalid speed value. Use a number between 0.1 and 2.0"]);
+            writeLines([SGR.brightRed + "Invalid speed value. Use a number between 0.1 and 2.0" + SGR.reset]);
           }
         } else if (cmd.includes("density")) {
           const density = parseFloat(cmd.split(/\s+/)[2]);
           if (!isNaN(density) && density >= 0.1 && density <= 1.0 && matrixRain.current) {
             matrixRain.current.updateConfig({ density });
-            writeLines([`Matrix density set to ${density}`]);
+            writeLines([SGR.green + `Matrix density set to ${density}` + SGR.reset]);
           } else {
-            writeLines(["Invalid density value. Use a number between 0.1 and 1.0"]);
+            writeLines([SGR.brightRed + "Invalid density value. Use a number between 0.1 and 1.0" + SGR.reset]);
           }
         } else {
           startMatrixRain();
@@ -280,21 +305,25 @@ const TerminalContainer: React.FC = () => {
         stopMatrixRain();
         break;
       case "exit":
-        terminal.current!.clear();
-        writeLines(["Terminal reset."], false);
+        terminal.current.clear();
+        writeLines([SGR.green + "Terminal reset." + SGR.reset], false);
         break;
       default:
-        writeLines([`Command not found: ${cmd.split(/\s+/)[0]}`]);
+        writeLines([SGR.brightRed + `Command not found: ${cmd.split(/\s+/)[0]}` + SGR.reset]);
     }
     
     if (showPrompt) {
-      terminal.current!.write("grux> ");
+      if (isBackdoorMode && virtualEnv.current) {
+        terminal.current.write(virtualEnv.current.getPrompt());
+      } else {
+        terminal.current.write(SGR.green + "grux> " + SGR.reset);
+      }
+      terminal.current.focus();
     }
   }, [writeLines, startMatrixRain, stopMatrixRain, isBackdoorMode, enterBackdoorMode]);
 
   useEffect(() => {
     const initializeTerminal = async () => {
-      console.log("[Terminal] Initializing...");
       terminal.current = new Terminal({
         rows: 24,
         cols: 80,
@@ -303,68 +332,83 @@ const TerminalContainer: React.FC = () => {
         theme: {
           background: "#000000",
           foreground: "#33ff33",
-          cursor: "#33ff33"
+          cursor: "#33ff33",
+          black: "#000000",
+          red: "#C51E14",
+          green: "#1DC121",
+          yellow: "#C7C329",
+          blue: "#0A2FC4",
+          magenta: "#C839C5",
+          cyan: "#20C5C6",
+          white: "#C7C7C7",
+          brightBlack: "#686868",
+          brightRed: "#FD6F6B",
+          brightGreen: "#67F86F",
+          brightYellow: "#FFFA72",
+          brightBlue: "#6A76FB",
+          brightMagenta: "#FD7CFC",
+          brightCyan: "#68FDFE",
+          brightWhite: "#FFFFFF"
         },
         cursorBlink: true,
         allowTransparency: true,
       });
-      
+
+      // Register color sequence handler
+      terminal.current.parser.registerCsiHandler(
+        { final: 'm' },
+        params => {
+          // Let xterm.js handle all color sequences
+          return false;
+        }
+      );
+
       fitAddon.current = new FitAddon();
       terminal.current.loadAddon(fitAddon.current);
-      
+
       if (terminalRef.current) {
         terminal.current.open(terminalRef.current);
+        
         terminal.current.onResize(({ cols, rows }) => {
-          console.log("[Terminal] Resize:", { cols, rows });
           if (matrixRain.current) {
             matrixRain.current.resize(cols, rows);
           }
         });
 
-        // Stop matrix effect on any key press
         terminal.current.onKey(() => {
           if (matrixRain.current?.isRunning) {
             stopMatrixRain();
           }
         });
 
-        // Stop matrix effect on mouse movement
         mouseMoveHandler.current = () => {
           if (matrixRain.current?.isRunning) {
             stopMatrixRain();
           }
         };
         terminalRef.current.addEventListener("mousemove", mouseMoveHandler.current);
-        
+
         try {
           await new Promise(resolve => requestAnimationFrame(resolve));
-          fitAddon.current!.fit();
+          fitAddon.current.fit();
           await new Promise(resolve => requestAnimationFrame(resolve));
           setIsTerminalReady(true);
-          console.log("[Terminal] Ready");
 
           writeLines([
-            "Welcome to GRUX Terminal!",
+            SGR.brightGreen + "Welcome to GRUX Terminal!" + SGR.reset,
             'Type "help" for a list of available commands.',
             ""
           ]);
           
-          resetIdleTimer();
-          
-          // Initialize TerminalLineReader to capture full lines.
-          lineReader.current = new TerminalLineReader(terminal.current!, executeCommand);
-          
-          // Set initial focus
+          lineReader.current = new TerminalLineReader(terminal.current, executeCommand);
           terminal.current.focus();
-          
         } catch (error) {
           console.error("[Terminal] Error during fit:", error);
         }
       }
     };
-    
+
     initializeTerminal().catch(console.error);
-    
     return () => {
       if (idleTimer.current) clearTimeout(idleTimer.current);
       if (matrixRain.current) matrixRain.current.cleanup();
@@ -373,14 +417,12 @@ const TerminalContainer: React.FC = () => {
       if (terminal.current) terminal.current.dispose();
       if (terminalRef.current && mouseMoveHandler.current) {
         terminalRef.current.removeEventListener("mousemove", mouseMoveHandler.current);
-        terminalRef.current.removeEventListener("click", () => {});
       }
     };
   }, [writeLines, executeCommand, resetIdleTimer, stopMatrixRain]);
 
   return (
-    <div style={containerStyle}
-         onClick={() => terminal.current?.focus()}>
+    <div style={containerStyle} onClick={() => terminal.current?.focus()}>
       <div ref={terminalRef} style={terminalStyle} />
     </div>
   );

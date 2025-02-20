@@ -1,9 +1,11 @@
 import { VirtualFilesystem } from './VirtualFilesystem';
 import { CommandResult, EnvVars, LsOptions } from './types';
 import { HACKER_ART } from './art';
+import { ColorManager, SGR } from '../terminal/colors';
 
 export interface BackdoorCommandResult extends CommandResult {
   shouldExit?: boolean;
+  delayedOutput?: boolean;
 }
 
 export class VirtualLinuxEnvironment {
@@ -40,7 +42,7 @@ export class VirtualLinuxEnvironment {
       // Handle exit/back commands first
       if (cmd === 'exit' || cmd === 'back') {
         return {
-          output: ['Leaving Matrix Defense System...'],
+          output: [ColorManager.fg('Leaving Matrix Defense System...', 'cyan')],
           exitCode: 0,
           shouldExit: true
         };
@@ -75,75 +77,64 @@ export class VirtualLinuxEnvironment {
           return { output: ['c'], exitCode: 0 }; // 'c' will be interpreted as clear screen
         default:
           return {
-            output: [`${cmd}: command not found`],
+            output: [ColorManager.error(`${cmd}: command not found`)],
             exitCode: 127
           };
       }
     } catch (error) {
       return {
-        output: [`${cmd}: ${error.message}`],
+        output: [ColorManager.error(`${cmd}: ${error.message}`)],
         exitCode: 1
       };
     }
   }
 
   private hack(): BackdoorCommandResult {
-    const esc = '';
-    const green = `${esc}[32m`;
-    const brightGreen = `${esc}[92m`;
-    const reset = `${esc}[0m`;
-
     const lines = HACKER_ART.split('\n').map(line =>
-      `${brightGreen}${line}${reset}`
+      ColorManager.style(line, ['brightGreen'])
     );
 
-    // Add some dramatic text at the bottom
+    // Add dramatic text with proper color sequences
     lines.push('');
-    lines.push(`${green}INITIATING SYSTEM HACK SEQUENCE...${reset}`);
-    lines.push(`${green}ACCESSING MAINFRAME...${reset}`);
-    lines.push(`${green}BYPASSING SECURITY PROTOCOLS...${reset}`);
-    lines.push(`${green}SYSTEM COMPROMISED${reset}`);
+    lines.push(ColorManager.style('INITIATING SYSTEM HACK SEQUENCE...', ['green', 'bold']));
+    lines.push(ColorManager.style('ACCESSING MAINFRAME...', ['green', 'bold']));
+    lines.push(ColorManager.style('BYPASSING SECURITY PROTOCOLS...', ['green', 'bold']));
+    lines.push(ColorManager.style('SYSTEM COMPROMISED', ['brightGreen', 'bold', 'blink']));
 
     return {
       output: lines,
       exitCode: 0,
-      delayedOutput: true // Enable typing effect for this command
+      delayedOutput: true
     };
   }
 
   private neofetch(): BackdoorCommandResult {
-    const esc = '\x1b';
-    const green = `${esc}[32m`;
-    const reset = `${esc}[0m`;
-    const bright = `${esc}[1m`;
-    const dim = `${esc}[2m`;
-
     const logo = [
-      `${green}         ███╗   ███╗ █████╗ ████████╗██████╗ ██╗██╗  ██╗${reset}`,
-      `${green}         ████╗ ████║██╔══██╗╚══██╔══╝██╔══██╗██║╚██╗██╔╝${reset}`,
-      `${green}         ██╔████╔██║███████║   ██║   ██████╔╝██║ ╚███╔╝${reset}`,
-      `${green}         ██║╚██╔╝██║██╔══██║   ██║   ██╔══██╗██║ ██╔██╗${reset}`,
-      `${green}         ██║ ╚═╝ ██║██║  ██║   ██║   ██║  ██║██║██╔╝ ██╗${reset}`,
-      `${green}         ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝${reset}`,
-      `${dim}              Defense System v2.0 - Follow the white rabbit${reset}`,
+      ColorManager.fg('         ███╗   ███╗ █████╗ ████████╗██████╗ ██╗██╗  ██╗', 'green'),
+      ColorManager.fg('         ████╗ ████║██╔══██╗╚══██╔══╝██╔══██╗██║╚██╗██╔╝', 'green'),
+      ColorManager.fg('         ██╔████╔██║███████║   ██║   ██████╔╝██║ ╚███╔╝', 'green'),
+      ColorManager.fg('         ██║╚██╔╝██║██╔══██║   ██║   ██╔══██╗██║ ██╔██╗', 'green'),
+      ColorManager.fg('         ██║ ╚═╝ ██║██║  ██║   ██║   ██║  ██║██║██╔╝ ██╗', 'green'),
+      ColorManager.fg('         ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝', 'green'),
+      ColorManager.style('              Defense System v2.0 - Follow the white rabbit', ['dim']),
       ''
     ];
 
     const info = [
-      `${bright}OS:${reset} Matrix Defense System 2.0 (Ubuntu 22.04 base)`,
-      `${bright}Kernel:${reset} 5.15.0-matrix`,
-      `${bright}Uptime:${reset} 13337 days, 1 hour, 23 mins`,
-      `${bright}Packages:${reset} 1999 (dpkg)`,
-      `${bright}Shell:${reset} ${this.env.SHELL}`,
-      `${bright}Resolution:${reset} 1920x1080 @ 144Hz`,
-      `${bright}DE:${reset} Matrix Environment 3.0`,
-      `${bright}WM:${reset} Digital Rain`,
-      `${bright}Terminal:${reset} xterm-matrix`,
-      `${bright}CPU:${reset} Quantum i9-9999K (128) @ 4.2GHz`,
-      `${bright}GPU:${reset} Neural Graphics 4090 Ti`,
-      `${bright}Memory:${reset} 128GB / 256GB`,
-      `${bright}Local IP:${reset} 10.31.33.7`,
-      `${bright}System Status:${reset} Compromised`,
+      `${ColorManager.style('OS:', ['bold'])} Matrix Defense System 2.0 (Ubuntu 22.04 base)`,
+      `${ColorManager.style('Kernel:', ['bold'])} 5.15.0-matrix`,
+      `${ColorManager.style('Uptime:', ['bold'])} 13337 days, 1 hour, 23 mins`,
+      `${ColorManager.style('Packages:', ['bold'])} 1999 (dpkg)`,
+      `${ColorManager.style('Shell:', ['bold'])} ${this.env.SHELL}`,
+      `${ColorManager.style('Resolution:', ['bold'])} 1920x1080 @ 144Hz`,
+      `${ColorManager.style('DE:', ['bold'])} Matrix Environment 3.0`,
+      `${ColorManager.style('WM:', ['bold'])} Digital Rain`,
+      `${ColorManager.style('Terminal:', ['bold'])} xterm-matrix`,
+      `${ColorManager.style('CPU:', ['bold'])} Quantum i9-9999K (128) @ 4.2GHz`,
+      `${ColorManager.style('GPU:', ['bold'])} Neural Graphics 4090 Ti`,
+      `${ColorManager.style('Memory:', ['bold'])} 128GB / 256GB`,
+      `${ColorManager.style('Local IP:', ['bold'])} 10.31.33.7`,
+      `${ColorManager.style('System Status:', ['bold'])} ${ColorManager.style('Compromised', ['brightGreen', 'bold'])}`,
       ''
     ];
 
@@ -165,7 +156,7 @@ export class VirtualLinuxEnvironment {
   private help(): BackdoorCommandResult {
     return {
       output: [
-        'Available commands:',
+        ColorManager.style('Available commands:', ['bold', 'brightCyan']),
         '  pwd               - Print working directory',
         '  cd [dir]         - Change directory',
         '  ls [-la]         - List directory contents',
@@ -178,8 +169,8 @@ export class VirtualLinuxEnvironment {
         '  clear            - Clear screen',
         '  help             - Show this help',
         '  neofetch         - Display system information',
-        '  hack             - Initiate system hack sequence',
-        '  exit, back       - Return to normal terminal',
+        ColorManager.style('  hack             - Initiate system hack sequence', ['brightGreen']),
+        ColorManager.style('  exit, back       - Return to normal terminal', ['dim'])
       ],
       exitCode: 0
     };
@@ -190,11 +181,14 @@ export class VirtualLinuxEnvironment {
   }
 
   public getPrompt(): string {
-    return this.env.PS1
-      .replace('\\u', this.env.USER)
-      .replace('\\h', this.env.HOSTNAME)
-      .replace('\\w', this.cwd.replace(this.env.HOME, '~'))
-      .replace('\\$', this.env.USER === 'root' ? '#' : '$');
+    return ColorManager.style(
+      this.env.PS1
+        .replace('\\u', this.env.USER)
+        .replace('\\h', this.env.HOSTNAME)
+        .replace('\\w', this.cwd.replace(this.env.HOME, '~'))
+        .replace('\\$', this.env.USER === 'root' ? '#' : '$'),
+      ['brightGreen']
+    );
   }
 
   private pwd(): BackdoorCommandResult {
@@ -207,7 +201,7 @@ export class VirtualLinuxEnvironment {
     
     if (!entry || entry.type !== 'directory') {
       return {
-        output: [`cd: ${dir}: No such directory`],
+        output: [ColorManager.error(`cd: ${dir}: No such directory`)],
         exitCode: 1
       };
     }
@@ -243,7 +237,7 @@ export class VirtualLinuxEnvironment {
       const entry = this.fs.resolvePath(resolvedPath);
 
       if (!entry) {
-        output.push(`ls: cannot access '${path}': No such file or directory`);
+        output.push(ColorManager.error(`ls: cannot access '${path}': No such file or directory`));
         continue;
       }
 
@@ -253,9 +247,12 @@ export class VirtualLinuxEnvironment {
           if (!options.all && name.startsWith('.')) return;
           const childEntry = this.fs.resolvePath(`${resolvedPath}/${name}`);
           if (childEntry) {
+            const displayName = childEntry.type === 'directory' ? 
+              ColorManager.style(name + '/', ['brightBlue', 'bold']) :
+              name;
             output.push(options.long 
-              ? this.fs.formatListing(childEntry, name)
-              : name + (childEntry.type === 'directory' ? '/' : ''));
+              ? this.fs.formatListing(childEntry, displayName)
+              : displayName);
           }
         });
       } else {
@@ -271,7 +268,7 @@ export class VirtualLinuxEnvironment {
   private cat(args: string[]): BackdoorCommandResult {
     if (args.length === 0) {
       return {
-        output: ['usage: cat [file...]'],
+        output: [ColorManager.error('usage: cat [file...]')],
         exitCode: 1
       };
     }
@@ -284,7 +281,7 @@ export class VirtualLinuxEnvironment {
       const content = this.fs.readFile(resolvedPath);
       
       if (content === null) {
-        output.push(`cat: ${path}: No such file`);
+        output.push(ColorManager.error(`cat: ${path}: No such file`));
         exitCode = 1;
       } else {
         output.push(...content.split('\n'));
@@ -303,14 +300,19 @@ export class VirtualLinuxEnvironment {
 
   private whoami(): BackdoorCommandResult {
     return {
-      output: [this.env.USER],
+      output: [ColorManager.style(this.env.USER, ['brightGreen'])],
       exitCode: 0
     };
   }
 
   private id(): BackdoorCommandResult {
     return {
-      output: [`uid=1000(${this.env.USER}) gid=1000(${this.env.USER}) groups=1000(${this.env.USER})`],
+      output: [
+        ColorManager.style(
+          `uid=1000(${this.env.USER}) gid=1000(${this.env.USER}) groups=1000(${this.env.USER})`,
+          ['brightGreen']
+        )
+      ],
       exitCode: 0
     };
   }
@@ -329,26 +331,28 @@ export class VirtualLinuxEnvironment {
 
     if (args.includes('-a')) {
       return {
-        output: [Object.values(info).join(' ')],
+        output: [ColorManager.style(Object.values(info).join(' '), ['brightGreen'])],
         exitCode: 0
       };
     }
 
     return {
-      output: [info.s],
+      output: [ColorManager.style(info.s, ['brightGreen'])],
       exitCode: 0
     };
   }
 
   private ps(): BackdoorCommandResult {
+    const header = ColorManager.style('  PID TTY          TIME CMD', ['bold']);
+    const processes = [
+      '    1 ?        00:00:00 init',
+      '  100 ?        00:00:01 systemd',
+      '  432 pts/0    00:00:00 bash',
+      '  433 pts/0    00:00:00 ps'
+    ].map(line => ColorManager.style(line, ['dim']));
+
     return {
-      output: [
-        'PID TTY          TIME CMD',
-        '  1 ?        00:00:00 init',
-        '100 ?        00:00:01 systemd',
-        '432 pts/0    00:00:00 bash',
-        '433 pts/0    00:00:00 ps'
-      ],
+      output: [header, ...processes],
       exitCode: 0
     };
   }

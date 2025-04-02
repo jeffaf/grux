@@ -4,6 +4,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { MatrixRain } from '../matrix';
 import { VirtualLinuxEnvironment } from '../backdoor/VirtualLinuxEnvironment';
 import { SGR } from './colors';
+import { CompletionManager, BackdoorCommandProvider, PathCompletionProvider } from './completion';
+import { CommandHistory } from './history';
 import 'xterm/css/xterm.css';
 
 const IDLE_TIMEOUT = 30000;
@@ -14,12 +16,23 @@ class TerminalLineReader {
   onLine: (line: string) => void;
   private _dataSubscription: IDisposable | null;
   private _sgrHandler: IDisposable | null;
+  private completionManager: CompletionManager;
+  private history: CommandHistory;
+  private cursorPosition: number = 0;
 
-  constructor(terminal: Terminal, onLine: (line: string) => void) {
+  constructor(terminal: Terminal, onLine: (line: string) => void, isBackdoorMode: boolean = false, virtualEnv?: VirtualLinuxEnvironment) {
     this.terminal = terminal;
     this.buffer = "";
     this.onLine = onLine;
     this._dataSubscription = this.terminal.onData(this.handleData);
+    this.completionManager = new CompletionManager();
+    this.history = new CommandHistory();
+
+    // Add completion providers for backdoor mode
+    if (isBackdoorMode && virtualEnv) {
+      this.completionManager.registerProvider(new BackdoorCommandProvider(virtualEnv));
+      this.completionManager.registerProvider(new PathCompletionProvider(virtualEnv.getFilesystem(), virtualEnv.getCurrentDirectory()));
+    }
 
     // Add SGR sequence handler
     this._sgrHandler = this.terminal.parser.registerCsiHandler(
@@ -34,34 +47,47 @@ class TerminalLineReader {
   private handleData = (data: string) => {
     const charCode = data.charCodeAt(0);
     
-    console.log('[LineReader] Received:', {
-      data,
-      charCode,
-      hex: charCode.toString(16),
-      buffer: this.buffer
-    });
+    // Handle special key sequences
+    if (data.length > 1 && data.startsWith('')) {
+      const remaining = data.slice(1);
+      if (remaining === '[A') {  // Up arrow
+        const historyCommand = this.history.back(this.buffer);
+        if (historyCommand !== undefined) {
+          this.updateBufferContent(historyCommand);
+        }
+        return;
+      } else if (remaining === '[B') {  // Down arrow
+        const historyCommand = this.history.forward();
+        this.updateBufferContent(historyCommand);
+        return;
+      }
+    }
 
     // Handle Enter key
     if (data === "\r" || data === "\n") {
       this.terminal.write("\r\n");
+      if (this.buffer.trim()) {
+        this.history.add(this.buffer);
+      }
       this.onLine(this.buffer);
       this.buffer = "";
+      this.cursorPosition = 0;
       return;
     }
 
     // Handle backspace/delete
     if (charCode === 127 || charCode === 8 || data === "\b") {
-      if (this.buffer.length > 0) {
+      if (this.buffer.length > 0 && this.cursorPosition > 0) {
         this.terminal.write("\b \b");
         this.buffer = this.buffer.slice(0, -1);
-        console.log('[LineReader] After backspace:', this.buffer);
+        this.cursorPosition--;
       }
       return;
     }
 
     // Handle TAB key
     if (charCode === 9) {
-      // TODO: Implement tab completion
+      this.handleTabCompletion();
       return;
     }
 
@@ -69,6 +95,8 @@ class TerminalLineReader {
     if (charCode === 3) {
       this.terminal.write("^C\r\n");
       this.buffer = "";
+      this.cursorPosition = 0;
+      this.history.reset();
       this.terminal.write("grux> ");
       return;
     }
@@ -77,8 +105,61 @@ class TerminalLineReader {
     if (data >= " " && data <= "~") {
       this.terminal.write(data);
       this.buffer += data;
+      this.cursorPosition++;
     }
   };
+
+  private updateBufferContent(newContent: string): void {
+    // Clear current line
+    const clearLine = "\r" + " ".repeat(this.buffer.length + 6) + "\r"; // 6 = "grux> ".length
+    this.terminal.write(clearLine);
+    this.terminal.write("grux> " + newContent);
+    this.buffer = newContent;
+    this.cursorPosition = newContent.length;
+  }
+
+  private handleTabCompletion = () => {
+    const result = this.completionManager.complete(this.buffer, this.cursorPosition);
+
+    if (result.matches.length === 0) {
+      // No matches - bell sound
+      this.terminal.write('');
+      return;
+    }
+
+    if (result.matches.length === 1) {
+      // Single match - complete the word
+      this.terminal.write('\r\n');
+      this.buffer = result.prefix || result.matches[0];
+      this.cursorPosition = this.buffer.length;
+      this.terminal.write(this.buffer);
+      return;
+    }
+
+    // Multiple matches - show options
+    const display = this.completionManager.formatCompletionDisplay(result);
+    this.terminal.write('\r\n');
+    display.forEach(line => this.terminal.writeln(line));
+
+    // Rewrite the prompt and current input
+    this.terminal.write('grux> ' + this.buffer);
+
+    // If there's a common prefix, extend the input
+    if (result.prefix && result.prefix.length > this.buffer.length) {
+      const extension = result.prefix.slice(this.buffer.length);
+      this.terminal.write(extension);
+      this.buffer += extension;
+      this.cursorPosition = this.buffer.length;
+    }
+  };
+
+  updateBackdoorMode(isBackdoorMode: boolean, virtualEnv?: VirtualLinuxEnvironment) {
+    this.completionManager = new CompletionManager();
+    if (isBackdoorMode && virtualEnv) {
+      this.completionManager.registerProvider(new BackdoorCommandProvider(virtualEnv));
+      this.completionManager.registerProvider(new PathCompletionProvider(virtualEnv.getFilesystem(), virtualEnv.getCurrentDirectory()));
+    }
+  }
 
   dispose() {
     if (this._dataSubscription) {
@@ -180,9 +261,13 @@ const TerminalContainer: React.FC = () => {
 
       terminal.current!.write(virtualEnv.current.getPrompt());
       terminal.current!.focus();
+
+      // Update line reader with backdoor mode
+      if (lineReader.current) {
+        lineReader.current.updateBackdoorMode(true, virtualEnv.current);
+      }
     };
 
-    // Use RAF to ensure DOM is updated
     requestAnimationFrame(() => {
       terminal.current?.focus();
       requestAnimationFrame(initializeBackdoor);
@@ -211,6 +296,11 @@ const TerminalContainer: React.FC = () => {
         terminal.current.clear();
         writeLines([SGR.green + 'Returned to GRUX Terminal.' + SGR.reset], true);
         terminal.current.focus();
+
+        // Update line reader mode
+        if (lineReader.current) {
+          lineReader.current.updateBackdoorMode(false);
+        }
       } else if (result.delayedOutput) {
         (async () => {
           for (const line of result.output) {
@@ -353,15 +443,6 @@ const TerminalContainer: React.FC = () => {
         cursorBlink: true,
         allowTransparency: true,
       });
-
-      // Register color sequence handler
-      terminal.current.parser.registerCsiHandler(
-        { final: 'm' },
-        params => {
-          // Let xterm.js handle all color sequences
-          return false;
-        }
-      );
 
       fitAddon.current = new FitAddon();
       terminal.current.loadAddon(fitAddon.current);

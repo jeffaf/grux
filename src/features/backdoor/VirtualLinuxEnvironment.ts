@@ -1,4 +1,16 @@
-// ... [Previous imports and interface remain the same]
+import { VirtualFilesystem } from './VirtualFilesystem';
+import { ColorManager } from '../terminal/colors';
+
+interface EnvVars {
+  HOME: string;
+  USER: string;
+  SHELL: string;
+  PATH: string;
+  PWD: string;
+  HOSTNAME: string;
+  PS1: string;
+  TERM: string;
+}
 
 export class VirtualLinuxEnvironment {
   private fs: VirtualFilesystem;
@@ -40,5 +52,4 @@ export class VirtualLinuxEnvironment {
       ['brightGreen']
     );
   }
-
-  // ... [Rest of the implementation remains the same]
+}

@@ -76,7 +76,16 @@
 - Improve parser hook implementations
 
 ## Known Issues
-None currently tracked
+- 🚨 Build failure in VirtualLinuxEnvironment.ts:
+  - Missing implementation of core methods
+  - File appears to be truncated
+  - Required fixes:
+    - Restore execCommand implementation
+    - Add getCompletions method
+    - Implement resolvePath
+    - Add getEnv/setEnv methods
+    - Implement formatOutput
+    - Restore class closing brace
 
 ## Performance Considerations
 - Monitor parser hooks overhead

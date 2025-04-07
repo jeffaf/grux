@@ -2,7 +2,6 @@
   "name": "grux",
   "version": "1.0.0",
   "description": "GRUX is a frontend-only terminal interface that displays tech feeds with a retro hacker aesthetic. Built with React and xterm.js, GRUX aims to provide a visually engaging and informative experience, reminiscent of classic terminal interfaces, while displaying modern tech news and updates.",
-  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "parcel index.html"
@@ -32,7 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.4",
-    "parcel": "^2.13.3",
+    "parcel": "^2.14.4",
     "process": "^0.11.10"
   }
 }

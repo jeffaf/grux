@@ -160,16 +160,21 @@ export class PathCompletionProvider implements CompletionProvider {
       // Handle absolute and relative paths
       const isAbsolute = lastPart.startsWith('/');
       const lastSlash = lastPart.lastIndexOf('/');
+      
+      const pathFragment = lastPart.substring(0, lastSlash) || '/';
       searchDir = isAbsolute
-        ? lastPart.substring(0, lastSlash) || '/'
-        : `${this.currentDir}/${lastPart.substring(0, lastSlash)}`;
+        ? pathFragment
+        : `${this.currentDir === '/' ? '' : this.currentDir}/${pathFragment}`;
+      
+      // Normalize the search directory path
+      searchDir = this.fs.normalizePath(searchDir) || this.currentDir;
       searchPattern = lastPart.substring(lastSlash + 1);
     }
 
     // Get directory entries
     try {
       const entries = this.fs.listDir(searchDir);
-      const matches = entries.filter(entry => 
+      const matches = entries.filter(entry =>
         entry.startsWith(searchPattern) &&
         (!searchPattern.startsWith('.') ? !entry.startsWith('.') : true)
       );
@@ -180,30 +185,48 @@ export class PathCompletionProvider implements CompletionProvider {
 
       // Find common prefix
       const prefix = matches.reduce((acc, curr) => {
-        for (let i = 0; i < acc.length; i++) {
+        for (let i = 0; i < Math.min(acc.length, curr.length); i++) {
           if (acc[i] !== curr[i]) {
             return acc.substring(0, i);
           }
         }
-        return acc;
-      });
+        return acc.length <= curr.length ? acc : curr;
+      }, matches[0]);
 
       // Format matches for display with colors
       const displayMatches = matches.map(match => {
-        const fullPath = `${searchDir}/${match}`.replace(/\/+/g, '/');
+        const fullPath = searchDir === '/'
+          ? `/${match}`
+          : `${searchDir}/${match}`;
+        
         const entry = this.fs.resolvePath(fullPath);
         return entry?.type === 'directory'
           ? ColorManager.style(match + '/', ['brightBlue', 'bold'])
           : match;
       });
 
+      // Calculate the new command with the completed path
+      let completedPrefix = '';
+      if (parts.length > 1) {
+        // Keep the command and other arguments, replace just the path part
+        completedPrefix = parts.slice(0, -1).join(' ') + ' ';
+      }
+      
+      // For the path part, determine whether to use absolute or relative
+      let pathPrefix = '';
+      if (lastPart.includes('/')) {
+        const lastSlash = lastPart.lastIndexOf('/');
+        pathPrefix = lastPart.substring(0, lastSlash + 1);
+      }
+
       return {
         matches,
         displayMatches,
-        prefix: parts.slice(0, -1).join(' ') + ' ' + prefix,
+        prefix: completedPrefix + pathPrefix + prefix,
         isPartial: matches.length > 1
       };
-    } catch {
+    } catch (error) {
+      console.error("Path completion error:", error);
       return { matches: [], isPartial: false };
     }
   }

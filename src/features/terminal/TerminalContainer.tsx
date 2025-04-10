@@ -3,7 +3,7 @@ import { Terminal, IDisposable } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { MatrixRain } from '../matrix';
 import { VirtualLinuxEnvironment } from '../backdoor/VirtualLinuxEnvironment';
-import { SGR } from './colors';
+import { SGR, ColorManager } from './colors';
 import { CompletionManager, BackdoorCommandProvider, PathCompletionProvider } from './completion';
 import { CommandHistory } from './history';
 import 'xterm/css/xterm.css';
@@ -239,14 +239,94 @@ const TerminalContainer: React.FC = () => {
     resetIdleTimer();
   }, [writeLines, resetIdleTimer]);
 
-  const enterBackdoorMode = useCallback(() => {
-    if (!terminal.current) return;
+  // Comprehensive monkey patch for xterm.js dimensions issue
+  const monkeyPatchTerminal = useCallback((term: Terminal) => {
+    try {
+      // @ts-ignore - Accessing internal property to apply monkey patch
+      const core = term._core;
+      if (!core) return;
 
-    const initializeBackdoor = () => {
+      console.log("Applying comprehensive terminal monkey patch");
+
+      // 1. Patch the renderService dimensions
+      if (core.renderer?._renderService && !core.renderer._renderService.dimensions) {
+        // @ts-ignore - Create a minimal dimensions object to prevent errors
+        core.renderer._renderService.dimensions = {
+          device: {
+            cell: { width: 9, height: 17 },
+            canvas: { width: 800, height: 600 }
+          },
+          actualCellWidth: 9,
+          actualCellHeight: 17
+        };
+      }
+
+      // 2. Patch the Viewport._innerRefresh method to handle missing dimensions
+      if (core.viewport) {
+        // @ts-ignore - Save the original method
+        const originalInnerRefresh = core.viewport._innerRefresh;
+        
+        // @ts-ignore - Replace with our safe version
+        core.viewport._innerRefresh = function() {
+          try {
+            // @ts-ignore - Check if renderService exists
+            if (!this._renderService) return;
+            
+            // @ts-ignore - Check if dimensions exists
+            if (!this._renderService.dimensions) {
+              // @ts-ignore - Create dimensions if missing
+              this._renderService.dimensions = {
+                device: {
+                  cell: { width: 9, height: 17 },
+                  canvas: { width: 800, height: 600 }
+                },
+                actualCellWidth: 9,
+                actualCellHeight: 17
+              };
+            }
+            
+            // Call original with try/catch
+            try {
+              originalInnerRefresh.apply(this);
+            } catch (e) {
+              console.warn("Error in original _innerRefresh:", e);
+            }
+          } catch (e) {
+            console.warn("Error in patched _innerRefresh:", e);
+          }
+        };
+      }
+    } catch (e) {
+      console.warn("Failed to apply terminal monkey patch:", e);
+    }
+  }, []);
+
+  const enterBackdoorMode = useCallback(() => {
+    if (!terminal.current || !isTerminalReady) return;
+
+    // Make sure Matrix Rain is stopped before entering backdoor mode
+    if (matrixRain.current?.isRunning) {
+      stopMatrixRain();
+    }
+
+    try {
+      // Apply comprehensive monkey patch to prevent dimensions error
+      if (terminal.current) {
+        monkeyPatchTerminal(terminal.current);
+      }
+      
+      // Create virtual environment
       virtualEnv.current = new VirtualLinuxEnvironment();
       setIsBackdoorMode(true);
-      terminal.current!.clear();
       
+      // Clear the terminal safely
+      try {
+        terminal.current.clear();
+      } catch (error) {
+        console.error("[Terminal] Error clearing terminal:", error);
+      }
+      
+      // Write the welcome message
       writeLines([
         SGR.brightGreen + "ACCESS GRANTED" + SGR.reset,
         SGR.green + "Welcome to the Matrix Defense System" + SGR.reset,
@@ -259,20 +339,26 @@ const TerminalContainer: React.FC = () => {
         ""
       ], false);
 
-      terminal.current!.write(virtualEnv.current.getPrompt());
-      terminal.current!.focus();
+      // Write the prompt and focus
+      if (terminal.current && virtualEnv.current) {
+        terminal.current.write(virtualEnv.current.getPrompt());
+        terminal.current.focus();
+      }
 
       // Update line reader with backdoor mode
-      if (lineReader.current) {
+      if (lineReader.current && virtualEnv.current) {
         lineReader.current.updateBackdoorMode(true, virtualEnv.current);
       }
-    };
-
-    requestAnimationFrame(() => {
-      terminal.current?.focus();
-      requestAnimationFrame(initializeBackdoor);
-    });
-  }, [writeLines]);
+    } catch (error) {
+      console.error("[Terminal] Error initializing backdoor:", error);
+      writeLines([
+        SGR.brightRed + "Error entering backdoor mode" + SGR.reset,
+        SGR.red + String(error) + SGR.reset
+      ]);
+      setIsBackdoorMode(false);
+      virtualEnv.current = null;
+    }
+  }, [writeLines, stopMatrixRain, isTerminalReady, monkeyPatchTerminal]);
 
   const executeCommand = useCallback((input: string) => {
     if (!terminal.current) return;
@@ -289,38 +375,51 @@ const TerminalContainer: React.FC = () => {
     }
 
     if (isBackdoorMode && virtualEnv.current) {
-      const result = virtualEnv.current.execCommand(cmd);
-      if (result.shouldExit) {
-        setIsBackdoorMode(false);
-        virtualEnv.current = null;
-        terminal.current.clear();
-        writeLines([SGR.green + 'Returned to GRUX Terminal.' + SGR.reset], true);
-        terminal.current.focus();
+      try {
+        const result = virtualEnv.current.execCommand(cmd);
+        
+        if (result.shouldExit) {
+          setIsBackdoorMode(false);
+          virtualEnv.current = null;
+          terminal.current.clear();
+          writeLines([SGR.green + 'Returned to GRUX Terminal.' + SGR.reset], true);
+          terminal.current.focus();
 
-        // Update line reader mode
-        if (lineReader.current) {
-          lineReader.current.updateBackdoorMode(false);
-        }
-      } else if (result.delayedOutput) {
-        (async () => {
-          for (const line of result.output) {
-            if (line.includes('INITIATING') || line.includes('ACCESSING') || 
-                line.includes('BYPASSING') || line.includes('COMPROMISED')) {
-              for (let i = 0; i < line.length; i++) {
-                terminal.current?.write(line[i]);
-                await new Promise(resolve => setTimeout(resolve, 50));
-              }
-              terminal.current?.write('\r\n');
-              await new Promise(resolve => setTimeout(resolve, 500));
-            } else {
-              terminal.current?.writeln(line);
-            }
+          // Update line reader mode
+          if (lineReader.current) {
+            lineReader.current.updateBackdoorMode(false);
           }
-          terminal.current?.write(virtualEnv.current?.getPrompt() || '');
-          terminal.current?.focus();
-        })();
-      } else {
-        writeLines(result.output, true);
+        } else if (result.delayedOutput) {
+          (async () => {
+            for (const line of result.output) {
+              if (line.includes('INITIATING') || line.includes('ACCESSING') ||
+                  line.includes('BYPASSING') || line.includes('COMPROMISED')) {
+                for (let i = 0; i < line.length; i++) {
+                  terminal.current?.write(line[i]);
+                  await new Promise(resolve => setTimeout(resolve, 50));
+                }
+                terminal.current?.write('\r\n');
+                await new Promise(resolve => setTimeout(resolve, 500));
+              } else {
+                terminal.current?.writeln(line);
+              }
+            }
+            terminal.current?.write(virtualEnv.current?.getPrompt() || '');
+            terminal.current?.focus();
+          })();
+        } else {
+          // Make sure we handle possibly empty output arrays
+          if (result.output && result.output.length > 0) {
+            writeLines(result.output, true);
+          } else {
+            // Just write the prompt for empty output
+            terminal.current.write(virtualEnv.current.getPrompt());
+          }
+          terminal.current.focus();
+        }
+      } catch (error) {
+        console.error("[Terminal] Error executing command:", error);
+        writeLines([ColorManager.style(`Error: ${error.message}`, ['brightRed'])], true);
         terminal.current.focus();
       }
       return;
@@ -469,22 +568,44 @@ const TerminalContainer: React.FC = () => {
         };
         terminalRef.current.addEventListener("mousemove", mouseMoveHandler.current);
 
+        // Simple terminal initialization
         try {
+          // First animation frame to ensure terminal is in DOM
           await new Promise(resolve => requestAnimationFrame(resolve));
-          fitAddon.current.fit();
+          
+          // Perform initial fit
+          if (fitAddon.current) {
+            fitAddon.current.fit();
+          }
+          
+          // Second animation frame to allow fit to complete
           await new Promise(resolve => requestAnimationFrame(resolve));
+          
+          // Apply monkey patch to prevent dimensions error
+          if (terminal.current) {
+            monkeyPatchTerminal(terminal.current);
+          }
+          
+          // Mark terminal as ready
           setIsTerminalReady(true);
-
+          
+          // Write welcome message
           writeLines([
             SGR.brightGreen + "Welcome to GRUX Terminal!" + SGR.reset,
             'Type "help" for a list of available commands.',
             ""
           ]);
           
-          lineReader.current = new TerminalLineReader(terminal.current, executeCommand);
-          terminal.current.focus();
+          // Create line reader
+          if (terminal.current) {
+            lineReader.current = new TerminalLineReader(terminal.current, executeCommand);
+            terminal.current.focus();
+          }
+          
+          // Start idle timer
+          resetIdleTimer();
         } catch (error) {
-          console.error("[Terminal] Error during fit:", error);
+          console.error("[Terminal] Error during initialization:", error);
         }
       }
     };
@@ -500,7 +621,7 @@ const TerminalContainer: React.FC = () => {
         terminalRef.current.removeEventListener("mousemove", mouseMoveHandler.current);
       }
     };
-  }, [writeLines, executeCommand, resetIdleTimer, stopMatrixRain]);
+  }, [writeLines, executeCommand, resetIdleTimer, stopMatrixRain, monkeyPatchTerminal]);
 
   return (
     <div style={containerStyle} onClick={() => terminal.current?.focus()}>

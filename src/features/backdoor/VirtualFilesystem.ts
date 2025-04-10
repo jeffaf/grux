@@ -135,17 +135,13 @@ export class VirtualFilesystem {
   }
 
   public resolvePath(path: string, options: PathResolutionOptions = {}): VirtualFSEntry | null {
-    const parts = path.split('/').filter(p => p !== '');
+    const normalizedPath = this.normalizePath(path);
+    if (normalizedPath === null) return null;
+
+    const parts = normalizedPath.split('/').filter(p => p !== '');
     let current: VirtualFSEntry = this.root;
-    
-    if (path.startsWith('/')) {
-      current = this.root;
-    }
 
     for (const part of parts) {
-      if (part === '.' || part === '') continue;
-      if (part === '..') continue;
-
       if (current.type !== 'directory') {
         return null;
       }
@@ -226,14 +222,44 @@ export class VirtualFilesystem {
     return this.resolvePath(path) !== null;
   }
 
+  public normalizePath(path: string): string | null {
+    // Handle empty path or just "/"
+    if (!path || path === '/') return '/';
+    
+    const parts = path.split('/').filter(p => p !== '' && p !== '.');
+    const normalized: string[] = [];
+    
+    try {
+      for (const part of parts) {
+        if (part === '..') {
+          if (normalized.length === 0) {
+            // Attempting to go above root
+            return '/';
+          }
+          normalized.pop();
+        } else {
+          normalized.push(part);
+        }
+      }
+      
+      return '/' + normalized.join('/');
+    } catch (err) {
+      return null;
+    }
+  }
+
   private getParentPath(path: string): string {
-    const parts = path.split('/');
+    const normalized = this.normalizePath(path);
+    if (!normalized) return '/';
+    const parts = normalized.split('/');
     return parts.slice(0, -1).join('/') || '/';
   }
 
   private getBasename(path: string): string {
-    const parts = path.split('/');
-    return parts[parts.length - 1];
+    const normalized = this.normalizePath(path);
+    if (!normalized) return '';
+    const parts = normalized.split('/');
+    return parts[parts.length - 1] || '';
   }
 
   public formatListing(entry: VirtualFSEntry, name: string): string {
